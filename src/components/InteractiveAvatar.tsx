@@ -12,6 +12,10 @@ export default function InteractiveAvatar({
   mouseX: externalMouseX, 
   mouseY: externalMouseY 
 }: InteractiveAvatarProps) {
+  const accentColor = "#c084fc";
+  const textMain = "#e5e7eb";
+  const cardBg = "#0f1524";
+
   // Use internal motion values if not provided via props
   const internalMouseX = useMotionValue(0);
   const internalMouseY = useMotionValue(0);
@@ -58,7 +62,12 @@ export default function InteractiveAvatar({
       className="w-[300px] h-[300px] md:w-[400px] md:h-[400px] flex items-center justify-center relative"
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      style={{ perspective: 1000 }}
+      style={{
+        perspective: 1000,
+        "--accent-color": accentColor,
+        "--text-main": textMain,
+        "--card-bg": cardBg,
+      } as React.CSSProperties}
     >
       <motion.div
         className="w-[240px] h-[240px] md:w-[320px] md:h-[320px] relative z-10"

@@ -25,7 +25,7 @@ interface Point2D {
 
 export default function TensorField3D() {
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   // Physics State
   const rotationVelX = useRef(ROTATION_SPEED);
   const rotationVelY = useRef(ROTATION_SPEED);
@@ -48,16 +48,16 @@ export default function TensorField3D() {
     if (isDragging.current) {
       const dx = e.clientX - lastMousePos.current.x;
       const dy = e.clientY - lastMousePos.current.y;
-      
+
       angleYRef.current += dx * 0.005;
       angleXRef.current -= dy * 0.005;
-      
+
       lastMousePos.current = { x: e.clientX, y: e.clientY };
     } else {
       const rect = e.currentTarget.getBoundingClientRect();
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
-      
+
       // Mouse offset from center
       const dx = e.clientX - rect.left - centerX;
       const dy = e.clientY - rect.top - centerY;
@@ -122,14 +122,14 @@ export default function TensorField3D() {
         // Rotation Y
         let x = node.x * cosY - node.z * sinY;
         let z = node.z * cosY + node.x * sinY;
-        
+
         // Rotation X
         let y = node.y * cosX - z * sinX;
         z = z * cosX + node.y * sinX;
 
         // 3D to 2D Projection
         const scale = PERSPECTIVE / (PERSPECTIVE + z);
-        
+
         return {
           x: x * scale,
           y: y * scale,
@@ -149,19 +149,21 @@ export default function TensorField3D() {
   // 3. DYNAMIC CONNECTIVITY
   const lines = useMemo(() => {
     const connections: JSX.Element[] = [];
-    
+
     for (let i = 0; i < projectedNodes.length; i++) {
       for (let j = i + 1; j < projectedNodes.length; j++) {
         const a = projectedNodes[i];
         const b = projectedNodes[j];
-        
+
         const dx = a.x - b.x;
         const dy = a.y - b.y;
         const distSq = dx * dx + dy * dy;
-        
+
         if (distSq < CONNECTION_DISTANCE * CONNECTION_DISTANCE) {
-          const opacity = Math.min(a.opacity, b.opacity) * (1 - distSq / (CONNECTION_DISTANCE * CONNECTION_DISTANCE));
-          
+          const opacity =
+            Math.min(a.opacity, b.opacity) *
+            (1 - distSq / (CONNECTION_DISTANCE * CONNECTION_DISTANCE));
+
           connections.push(
             <line
               key={`${i}-${j}`}
@@ -181,8 +183,8 @@ export default function TensorField3D() {
   }, [projectedNodes]);
 
   return (
-    <div 
-      className="w-[300px] h-[300px] md:w-[400px] md:h-[400px] flex items-center justify-center relative cursor-grab active:cursor-grabbing scale-115 translate-x-25"
+    <div
+      className="w-[280px] h-[280px] sm:w-[300px] sm:h-[300px] md:w-[400px] md:h-[400px] flex items-center justify-center relative cursor-grab active:cursor-grabbing scale-100 sm:scale-115 translate-x-0 sm:translate-x-10 md:translate-x-25"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -191,11 +193,11 @@ export default function TensorField3D() {
     >
       <div className="relative w-full h-full flex items-center justify-center">
         {/* SVG LAYER for Lines */}
-        <svg 
-            className="absolute inset-0 w-full h-full pointer-events-none"
-            viewBox="-200 -200 400 400" // Center 0,0
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          viewBox="-200 -200 400 400" // Center 0,0
         >
-            {lines}
+          {lines}
         </svg>
 
         {/* DOM LAYER for Nodes (Dots) */}
@@ -211,11 +213,13 @@ export default function TensorField3D() {
               top: "50%",
               transform: `translate3d(${node.x}px, ${node.y}px, 0) scale(${node.scale})`,
               opacity: node.opacity,
-              boxShadow: `0 0 ${10 * node.scale}px rgba(165, 180, 252, ${node.opacity})` // Glow
+              boxShadow: `0 0 ${10 * node.scale}px rgba(165, 180, 252, ${
+                node.opacity
+              })`, // Glow
             }}
           />
         ))}
-        
+
         {/* Central Core Hint (Optional) */}
         <div className="absolute w-20 h-20 bg-[#A5B4FC] rounded-full opacity-5 blur-3xl pointer-events-none" />
       </div>
