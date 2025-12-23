@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect, useRef } from "react";
-import { motion, useMotionValue, useSpring } from "framer-motion";
+import React, { useMemo, useState, useEffect, useRef, type JSX } from "react";
 
 // === CONSTANTS ===
 const NUM_NODES = 45; // Density of the cloud
@@ -37,6 +36,15 @@ export default function TensorField3D() {
   // Angle Refs
   const angleXRef = useRef(0);
   const angleYRef = useRef(0);
+
+  // Generate points once (SSR-safe, no random in render)
+  const [initialNodes] = useState<Point3D[]>(() =>
+    Array.from({ length: NUM_NODES }).map(() => ({
+      x: (Math.random() - 0.5) * 2 * BOUNDS,
+      y: (Math.random() - 0.5) * 2 * BOUNDS,
+      z: (Math.random() - 0.5) * 2 * BOUNDS,
+    }))
+  );
 
   // Mouse Interaction
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -90,14 +98,6 @@ export default function TensorField3D() {
 
   // 1. DATA GENERATION (The Point Cloud)
   // Generate random points in 3D space once
-  const initialNodes: Point3D[] = useMemo(() => {
-    return Array.from({ length: NUM_NODES }).map(() => ({
-      x: (Math.random() - 0.5) * 2 * BOUNDS,
-      y: (Math.random() - 0.5) * 2 * BOUNDS,
-      z: (Math.random() - 0.5) * 2 * BOUNDS,
-    }));
-  }, []);
-
   // Frame Loop State for projected points
   const [projectedNodes, setProjectedNodes] = useState<Point2D[]>([]);
 
@@ -120,11 +120,11 @@ export default function TensorField3D() {
       // 2. Projection Step
       const newProjected: Point2D[] = initialNodes.map((node) => {
         // Rotation Y
-        let x = node.x * cosY - node.z * sinY;
+        const x = node.x * cosY - node.z * sinY;
         let z = node.z * cosY + node.x * sinY;
 
         // Rotation X
-        let y = node.y * cosX - z * sinX;
+        const y = node.y * cosX - z * sinX;
         z = z * cosX + node.y * sinX;
 
         // 3D to 2D Projection
