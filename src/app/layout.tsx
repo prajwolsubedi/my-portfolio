@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     siteName: "Prajwol Subedi",
     images: [
       {
-        url: "/myavatar.png",
+        url: "/avatar-christmas.png",
         width: 512,
         height: 512,
         alt: "Prajwol Subedi avatar",
@@ -45,14 +45,14 @@ export const metadata: Metadata = {
     title: "Prajwol Subedi - AI Engineer",
     description:
       "Portfolio of Prajwol Subedi, AI Engineer building AI products, automation, and clean user experiences.",
-    images: ["/myavatar.png"],
+    images: ["/avatar-christmas.png"],
   },
   icons: {
     icon: [
       // { url: "/favicon.ico", sizes: "any" },
-      { url: "/myavatar.png", type: "image/png", sizes: "192x192" },
+      { url: "/avatar-christmas.png", type: "image/png", sizes: "192x192" },
     ],
-    apple: "/myavatar.png",
+    apple: "/avatar-christmas.png",
   },
 };
 

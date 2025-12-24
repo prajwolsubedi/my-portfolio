@@ -25,11 +25,11 @@ export default function Navbar() {
           onClick={closeMenu}
         >
           <Image
-            src="/myavatar.png"
+            src="/avatar-christmas.png"
             alt="Prajwol avatar"
             width={36}
             height={36}
-            className="rounded-full border border-(--accent-color)/40 shadow-sm sm:w-10 sm:h-10"
+            className="rounded-full border border-(--accent-color)/40 shadow-sm sm:w-12 sm:h-12"
             priority
           />
         </Link>

@@ -12,6 +12,7 @@ import {
   FaArrowDown,
 } from "react-icons/fa6";
 import TensorField3D from "./TensorField3D";
+import Snowfall from "./Snowfall";
 
 export default function Hero() {
   // Motion values for the interactive character
@@ -178,6 +179,9 @@ export default function Hero() {
 
       {/* Background Decor (Optional Subtle Gradient) */}
       <div className="absolute inset-0 -z-10 bg-gradient-to-b from-[var(--bg-color)] to-[#000000] pointer-events-none" />
+
+      {/* Christmas Snowfall Animation - Remove after Christmas */}
+      <Snowfall />
     </section>
   );
 }
