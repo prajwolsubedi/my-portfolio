@@ -89,7 +89,7 @@ export default function Hero() {
             className="mt-4 text-lg md:text-xl text-[var(--text-secondary)] font-sans max-w-[600px] md:mx-0 mx-auto"
             variants={itemVariants}
           >
-            An AI Engineer passionate about building products and automating
+            An Software Engineer passionate about building products and automating
             things.
           </motion.p>
 
