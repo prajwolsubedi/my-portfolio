@@ -67,7 +67,7 @@ export default function Hero() {
   return (
     <section
       id="hero"
-      className="min-h-screen w-full flex items-center justify-center px-6 md:px-12 relative overflow-hidden"
+      className="min-h-screen w-full flex items-center justify-center px-6 md:px-12 relative overflow-hidden pt-48 sm:pt-0"
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
@@ -89,8 +89,8 @@ export default function Hero() {
             className="mt-4 text-lg md:text-xl text-[var(--text-secondary)] font-sans max-w-[600px] md:mx-0 mx-auto"
             variants={itemVariants}
           >
-            An Software Engineer passionate about building products and automating
-            things.
+            An Software Engineer passionate about building products and
+            automating things.
           </motion.p>
 
           {/* Social Icons */}

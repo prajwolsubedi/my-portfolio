@@ -1,34 +1,59 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 export default function Snowfall() {
-  // Generate snowflakes with variety - using useState to avoid Math.random in render
-  const [snowflakes] = useState(() => {
-    return Array.from({ length: 80 }).map((_, i) => ({
-      id: i,
-      left: Math.random() * 100,
-      animationDelay: Math.random() * 8,
-      animationDuration: 6 + Math.random() * 10,
-      size: 2 + Math.random() * 4,
-      opacity: 0.4 + Math.random() * 0.6,
-      // Variation in drift direction
-      drift: (Math.random() - 0.5) * 50,
-      // Some snowflakes are actual snowflake characters
-      isSymbol: Math.random() > 0.7,
-    }));
-  });
+  // Only generate on client to avoid hydration mismatch
+  const [snowflakes, setSnowflakes] = useState<
+    Array<{
+      id: number;
+      left: number;
+      animationDelay: number;
+      animationDuration: number;
+      size: number;
+      opacity: number;
+      drift: number;
+      isSymbol: boolean;
+    }>
+  >([]);
 
-  const [sparkles] = useState(() => {
-    return Array.from({ length: 20 }).map((_, i) => ({
-      id: i,
-      left: Math.random() * 100,
-      bottom: 8 + Math.random() * 12,
-      opacity: 0.2 + Math.random() * 0.4,
-      duration: 2 + Math.random() * 2,
-      delay: Math.random() * 2,
-    }));
-  });
+  const [sparkles, setSparkles] = useState<
+    Array<{
+      id: number;
+      left: number;
+      bottom: number;
+      opacity: number;
+      duration: number;
+      delay: number;
+    }>
+  >([]);
+
+  useEffect(() => {
+    // Generate snowflakes only on client
+    setSnowflakes(
+      Array.from({ length: 80 }).map((_, i) => ({
+        id: i,
+        left: Math.random() * 100,
+        animationDelay: Math.random() * 8,
+        animationDuration: 6 + Math.random() * 10,
+        size: 2 + Math.random() * 4,
+        opacity: 0.4 + Math.random() * 0.6,
+        drift: (Math.random() - 0.5) * 50,
+        isSymbol: Math.random() > 0.7,
+      }))
+    );
+
+    setSparkles(
+      Array.from({ length: 20 }).map((_, i) => ({
+        id: i,
+        left: Math.random() * 100,
+        bottom: 8 + Math.random() * 12,
+        opacity: 0.2 + Math.random() * 0.4,
+        duration: 2 + Math.random() * 2,
+        delay: Math.random() * 2,
+      }))
+    );
+  }, []);
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
