@@ -3,6 +3,7 @@
 import { Variants, motion } from "framer-motion";
 import React from "react";
 import Link from "next/link";
+import { projects } from "@/data/projects";
 
 export default function Projects() {
   const containerVariants: Variants = {
@@ -85,31 +86,3 @@ export default function Projects() {
     </section>
   );
 }
-
-const projects = [
-  {
-    title: "Project One",
-    slug: "project-one",
-    image: "/project1.png",
-    href: "https://ainews.prajwolsubedi.com.np/#/about",
-    external: true,
-  },
-  {
-    title: "Project Two",
-    slug: "project-two",
-    image: "/project2.png",
-    href: "/projects/project-two",
-  },
-  {
-    title: "Project Three",
-    slug: "project-three",
-    image: "/project3.png",
-    href: "/projects/project-three",
-  },
-  {
-    title: "Project Four",
-    slug: "project-four",
-    image: "/project4.png",
-    href: "/projects/project-four",
-  },
-];

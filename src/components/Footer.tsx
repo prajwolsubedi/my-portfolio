@@ -11,7 +11,10 @@ import {
 
 export default function Footer() {
   return (
-    <footer className="w-full bg-transparent text-[var(--text-secondary)] py-6 sm:py-8 px-4 sm:px-6 md:px-12">
+    <footer
+      id="site-footer"
+      className="w-full bg-transparent text-(--text-secondary) py-6 sm:py-8 px-4 sm:px-6 md:px-12"
+    >
       <div className="max-w-[1200px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
         <p className="text-sm order-2 md:order-1">&copy; 2025 Prajwol Subedi</p>
         <div className="flex items-center gap-4 sm:gap-6 order-1 md:order-2">

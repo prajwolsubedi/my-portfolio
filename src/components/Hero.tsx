@@ -86,7 +86,7 @@ export default function Hero() {
             Hi! I am Prajwol Subedi
           </motion.h1>
           <motion.p
-            className="mt-4 text-lg md:text-xl text-[var(--text-secondary)] font-sans max-w-[600px] md:mx-0 mx-auto"
+            className="mt-4 text-lg md:text-xl text-(--text-secondary) font-sans max-w-[600px] md:mx-0 mx-auto"
             variants={itemVariants}
           >
             An Software Engineer passionate about building products and
@@ -102,7 +102,7 @@ export default function Hero() {
               href="https://github.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[var(--text-secondary)] hover:text-[#a8d4f0] transition-colors"
+              className="text-(--text-secondary) hover:text-[#a8d4f0] transition-colors"
             >
               <FaGithub size={24} />
             </a>
@@ -110,7 +110,7 @@ export default function Hero() {
               href="https://www.linkedin.com/in/prajwol-subedi-506537219/"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[var(--text-secondary)] hover:text-[#a8d4f0] transition-colors"
+              className="text-(--text-secondary) hover:text-[#a8d4f0] transition-colors"
             >
               <FaLinkedin size={24} />
             </a>
@@ -118,7 +118,7 @@ export default function Hero() {
               href="https://www.youtube.com/watch?v=FKtBOpiahr8"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[var(--text-secondary)] hover:text-[#a8d4f0] transition-colors"
+              className="text-(--text-secondary) hover:text-[#a8d4f0] transition-colors"
             >
               <FaYoutube size={24} />
             </a>
@@ -126,13 +126,13 @@ export default function Hero() {
               href="https://www.tiktok.com/@just_ask_it"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[var(--text-secondary)] hover:text-[#a8d4f0] transition-colors"
+              className="text-(--text-secondary) hover:text-[#a8d4f0] transition-colors"
             >
               <FaTiktok size={24} />
             </a>
             <a
               href="mailto:email@example.com"
-              className="text-[var(--text-secondary)] hover:text-[#a8d4f0] transition-colors"
+              className="text-(--text-secondary) hover:text-[#a8d4f0] transition-colors"
             >
               <FaEnvelope size={24} />
             </a>
@@ -144,17 +144,16 @@ export default function Hero() {
             variants={itemVariants}
           >
             <a
-              href="https://drive.google.com/uc?export=download&id=1KFjMqohdrVAU3l8AtRkydQBnwFmkUtdQ"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group flex items-center justify-center gap-2 px-5 sm:px-6 py-3 bg-[var(--text-main)] text-[var(--bg-color)] font-semibold rounded-lg shadow-md hover:bg-opacity-90 transition-all duration-300 transform hover:-translate-y-1 w-full sm:w-auto text-sm sm:text-base"
+              href="/prajwol_2026.pdf"
+              download
+              className="group flex items-center justify-center gap-2 px-5 sm:px-6 py-3 bg-(--text-main) text-(--bg-color) font-semibold rounded-lg shadow-md hover:bg-opacity-90 transition-all duration-300 transform hover:-translate-y-1 w-full sm:w-auto text-sm sm:text-base"
             >
               <FaDownload className="transition-transform duration-300 group-hover:scale-110" />
               Download Resume
             </a>
             <a
               href="#projects"
-              className="group flex items-center justify-center gap-2 px-5 sm:px-6 py-3 bg-transparent border border-[var(--text-secondary)] text-[var(--text-main)] font-semibold rounded-lg hover:bg-[var(--text-main)] hover:text-[var(--bg-color)] hover:border-[var(--text-main)] transition-all duration-300 transform hover:-translate-y-1 w-full sm:w-auto text-sm sm:text-base"
+              className="group flex items-center justify-center gap-2 px-5 sm:px-6 py-3 bg-transparent border border-(--text-secondary) text-(--text-main) font-semibold rounded-lg hover:bg-(--text-main) hover:text-(--bg-color) hover:border-(--text-main) transition-all duration-300 transform hover:-translate-y-1 w-full sm:w-auto text-sm sm:text-base"
             >
               View Projects
               <FaArrowDown className="transition-transform duration-300 group-hover:translate-y-1" />
@@ -178,7 +177,7 @@ export default function Hero() {
       </motion.div>
 
       {/* Background Decor (Optional Subtle Gradient) */}
-      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-[var(--bg-color)] to-[#000000] pointer-events-none" />
+      <div className="absolute inset-0 -z-10 bg-linear-to-b from-(--bg-color) to-[#000000] pointer-events-none" />
 
       {/* Christmas Snowfall Animation - Remove after Christmas */}
       <Snowfall />
