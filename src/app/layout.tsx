@@ -22,11 +22,11 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   title: "Prajwol Subedi - AI Engineer",
   description:
-    "Portfolio of Prajwol Subedi, AI Engineer building AI products, automation, and clean user experiences.",
+    "Portfolio of Prajwol Subedi, Software Engineer building AI products, automation, and clean user experiences.",
   openGraph: {
-    title: "Prajwol Subedi - AI Engineer",
+    title: "Prajwol Subedi - Software Engineer",
     description:
-      "Portfolio of Prajwol Subedi, AI Engineer building AI products, automation, and clean user experiences.",
+      "Portfolio of Prajwol Subedi, Software Engineer building AI products, automation, and clean user experiences.",
     url: "https://www.prajwolsubedi.com.np/",
     siteName: "Prajwol Subedi",
     images: [
@@ -42,9 +42,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Prajwol Subedi - AI Engineer",
+    title: "Prajwol Subedi - Software Engineer",
     description:
-      "Portfolio of Prajwol Subedi, AI Engineer building AI products, automation, and clean user experiences.",
+      "Portfolio of Prajwol Subedi, Software Engineer building AI products, automation, and clean user experiences.",
     images: ["/avatar-christmas.png"],
   },
   icons: {
