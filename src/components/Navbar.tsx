@@ -11,6 +11,7 @@ export default function Navbar() {
   const navLinks = [
     { label: "Home", href: "#home" },
     { label: "Projects", href: "#projects" },
+    { label: "Blog", href: "/blogs" },
   ];
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
