@@ -9,11 +9,13 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "firebase": "^12.16.0",
     "framer-motion": "^12.23.26",
     "next": "16.1.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-icons": "^5.5.0"
+    "react-icons": "^5.5.0",
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -24,5 +26,6 @@
     "eslint-config-next": "16.1.0",
     "tailwindcss": "^4",
     "typescript": "^5"
-  }
+  },
+  "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be"
 }
