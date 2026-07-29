@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import type { Blog } from "@/lib/types";
 import BlogEditor from "@/components/blog/BlogEditor";
-import { getBlogCategory, getBlogVisibility, isVisibleToPublic } from "@/lib/blogUtils";
+import { getBlogCategory, getBlogVisibility } from "@/lib/blogUtils";
 
 type View = "dashboard" | "editor";
 
@@ -11,6 +12,8 @@ export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [checking, setChecking] = useState(true);
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [loginStep, setLoginStep] = useState<"password" | "otp">("password");
   const [loginError, setLoginError] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
 
@@ -64,7 +67,7 @@ export default function AdminPage() {
       });
 
       if (res.ok) {
-        setAuthenticated(true);
+        setLoginStep("otp");
         setPassword("");
       } else {
         setLoginError("Incorrect password");
@@ -73,6 +76,38 @@ export default function AdminPage() {
       setLoginError("Connection error");
     }
     setLoggingIn(false);
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoggingIn(true);
+    setLoginError("");
+
+    try {
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: otp }),
+      });
+
+      if (res.ok) {
+        setAuthenticated(true);
+        setOtp("");
+        setLoginStep("password");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setLoginError(data.error || "Incorrect code");
+      }
+    } catch {
+      setLoginError("Connection error");
+    }
+    setLoggingIn(false);
+  };
+
+  const handleBackToPassword = () => {
+    setLoginStep("password");
+    setOtp("");
+    setLoginError("");
   };
 
   const handleLogout = async () => {
@@ -122,8 +157,7 @@ export default function AdminPage() {
   const filteredBlogs = blogs
     .filter((b) => filter === "all" || b.status === filter)
     .filter((b) => categoryFilter === "all" || getBlogCategory(b) === categoryFilter)
-    .filter((b) => visibilityFilter === "all" || getBlogVisibility(b) === visibilityFilter)
-    .filter((b) => viewMode === "admin" || isVisibleToPublic(b));
+    .filter((b) => visibilityFilter === "all" || getBlogVisibility(b) === visibilityFilter);
 
   const fontPoppins = { fontFamily: "var(--font-poppins), Poppins, sans-serif" };
   const fontPlayfair = { fontFamily: "var(--font-playfair), Georgia, serif" };
@@ -141,38 +175,88 @@ export default function AdminPage() {
   if (!authenticated) {
     return (
       <div className="min-h-screen bg-[var(--bg-color)] flex items-center justify-center px-6">
-        <form onSubmit={handleLogin} className="w-full max-w-sm space-y-6">
-          <h1
-            className="text-3xl font-light text-[var(--text-main)] text-center"
-            style={fontPlayfair}
-          >
-            Admin Login
-          </h1>
-          <div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              className="w-full bg-transparent border border-[var(--text-secondary)]/30 rounded-lg px-4 py-3 text-[var(--text-main)] placeholder-[var(--text-secondary)]/50 focus:outline-none focus:border-[#a8d4f0] transition-colors"
+        {loginStep === "password" ? (
+          <form onSubmit={handleLogin} className="w-full max-w-sm space-y-6">
+            <h1
+              className="text-3xl font-light text-[var(--text-main)] text-center"
+              style={fontPlayfair}
+            >
+              Admin Login
+            </h1>
+            <div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                className="w-full bg-transparent border border-[var(--text-secondary)]/30 rounded-lg px-4 py-3 text-[var(--text-main)] placeholder-[var(--text-secondary)]/50 focus:outline-none focus:border-[#a8d4f0] transition-colors"
+                style={fontPoppins}
+                autoFocus
+              />
+            </div>
+            {loginError && (
+              <p className="text-red-400 text-sm text-center" style={fontPoppins}>
+                {loginError}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={loggingIn || !password}
+              className="w-full py-3 bg-[var(--text-main)] text-[var(--bg-color)] rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
               style={fontPoppins}
-              autoFocus
-            />
-          </div>
-          {loginError && (
-            <p className="text-red-400 text-sm text-center" style={fontPoppins}>
-              {loginError}
-            </p>
-          )}
-          <button
-            type="submit"
-            disabled={loggingIn || !password}
-            className="w-full py-3 bg-[var(--text-main)] text-[var(--bg-color)] rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
-            style={fontPoppins}
-          >
-            {loggingIn ? "Logging in..." : "Login"}
-          </button>
-        </form>
+            >
+              {loggingIn ? "Sending code..." : "Continue"}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyOtp} className="w-full max-w-sm space-y-6">
+            <div className="text-center space-y-1">
+              <h1
+                className="text-3xl font-light text-[var(--text-main)]"
+                style={fontPlayfair}
+              >
+                Enter Code
+              </h1>
+              <p className="text-sm text-[var(--text-secondary)]" style={fontPoppins}>
+                We emailed a 6-digit code. It expires in 5 minutes.
+              </p>
+            </div>
+            <div>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                placeholder="000000"
+                className="w-full bg-transparent border border-[var(--text-secondary)]/30 rounded-lg px-4 py-3 text-center text-2xl tracking-[0.5em] text-[var(--text-main)] placeholder-[var(--text-secondary)]/30 focus:outline-none focus:border-[#a8d4f0] transition-colors"
+                style={fontPoppins}
+                autoFocus
+              />
+            </div>
+            {loginError && (
+              <p className="text-red-400 text-sm text-center" style={fontPoppins}>
+                {loginError}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={loggingIn || otp.length !== 6}
+              className="w-full py-3 bg-[var(--text-main)] text-[var(--bg-color)] rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+              style={fontPoppins}
+            >
+              {loggingIn ? "Verifying..." : "Verify"}
+            </button>
+            <button
+              type="button"
+              onClick={handleBackToPassword}
+              className="w-full text-sm text-[var(--text-secondary)] hover:text-[var(--text-main)] transition-colors"
+              style={fontPoppins}
+            >
+              Back
+            </button>
+          </form>
+        )}
       </div>
     );
   }
@@ -354,12 +438,24 @@ export default function AdminPage() {
                       {formatDate(blog.createdAt)}
                     </span>
                   </div>
-                  <h3
-                    className="text-lg text-[var(--text-main)] font-light truncate"
-                    style={fontPlayfair}
-                  >
-                    {blog.title}
-                  </h3>
+                  {viewMode === "audience" ? (
+                    <Link
+                      href={`/blogs/${blog.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-lg text-[var(--text-main)] font-light truncate block hover:underline"
+                      style={fontPlayfair}
+                    >
+                      {blog.title}
+                    </Link>
+                  ) : (
+                    <h3
+                      className="text-lg text-[var(--text-main)] font-light truncate"
+                      style={fontPlayfair}
+                    >
+                      {blog.title}
+                    </h3>
+                  )}
                 </div>
 
                 {/* Actions */}
