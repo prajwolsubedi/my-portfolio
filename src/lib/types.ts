@@ -1,8 +1,8 @@
 export interface BlogBlock {
   id: string;
-  type: "text" | "image" | "video";
-  content: string; // text content, or URL for image/video
-  caption?: string; // optional caption for images/videos
+  type: "text" | "image" | "video" | "youtube";
+  content: string; // text content, URL for image/video, or video ID for youtube
+  caption?: string; // optional caption for images/videos/youtube
 }
 
 export interface Blog {
@@ -10,6 +10,8 @@ export interface Blog {
   title: string;
   blocks: BlogBlock[];
   status: "published" | "archived" | "draft";
+  category?: "daily" | "monthly";
+  visibility?: "public" | "private";
   createdAt: number;
   updatedAt: number;
 }

@@ -11,14 +11,21 @@ interface BlogEditorProps {
 
 export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
   const [title, setTitle] = useState(blog?.title || "");
+  const [category, setCategory] = useState<"daily" | "monthly">(
+    blog?.category === "monthly" ? "monthly" : "daily"
+  );
+  const [visibility, setVisibility] = useState<"public" | "private">(
+    blog?.visibility === "private" ? "private" : "public"
+  );
   const [blocks, setBlocks] = useState<BlogBlock[]>(
     blog?.blocks || [{ id: uuidv4(), type: "text", content: "" }]
   );
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [pendingBlockType, setPendingBlockType] = useState<"image" | "video" | null>(null);
+  const [pendingBlockType, setPendingBlockType] = useState<"image" | "video" | "youtube" | null>(null);
   const [pendingInsertIndex, setPendingInsertIndex] = useState<number | null>(null);
+  const [pendingYoutubeTitle, setPendingYoutubeTitle] = useState("");
 
   const fontPoppins = { fontFamily: "var(--font-poppins), Poppins, sans-serif" };
   const fontPlayfair = { fontFamily: "var(--font-playfair), Georgia, serif" };
@@ -37,6 +44,15 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
   const addBlock = (type: BlogBlock["type"], afterIndex: number) => {
     if (type === "image" || type === "video") {
       setPendingBlockType(type);
+      setPendingInsertIndex(afterIndex);
+      fileInputRef.current?.click();
+      return;
+    }
+    if (type === "youtube") {
+      const videoTitle = window.prompt("YouTube video title:", title || "Blog video");
+      if (!videoTitle) return;
+      setPendingYoutubeTitle(videoTitle);
+      setPendingBlockType("youtube");
       setPendingInsertIndex(afterIndex);
       fileInputRef.current?.click();
       return;
@@ -72,12 +88,18 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const isYoutube = pendingBlockType === "youtube";
+      if (isYoutube) formData.append("title", pendingYoutubeTitle);
+
+      const res = await fetch(isYoutube ? "/api/upload-youtube" : "/api/upload", {
+        method: "POST",
+        body: formData,
+      });
       const data = await res.json();
 
       if (res.ok) {
         setBlocks((prev) =>
-          prev.map((b) => (b.id === blockId ? { ...b, content: data.url } : b))
+          prev.map((b) => (b.id === blockId ? { ...b, content: isYoutube ? data.videoId : data.url } : b))
         );
       } else {
         setBlocks((prev) => prev.filter((b) => b.id !== blockId));
@@ -91,6 +113,7 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
     setUploading(null);
     setPendingBlockType(null);
     setPendingInsertIndex(null);
+    setPendingYoutubeTitle("");
     // Reset file input
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -120,7 +143,7 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), blocks, status }),
+        body: JSON.stringify({ title: title.trim(), blocks, status, category, visibility }),
       });
 
       if (res.ok) {
@@ -168,12 +191,50 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
           </div>
         </div>
 
+        {/* Category toggle */}
+        <div className="flex gap-2 mb-6">
+          {(["daily", "monthly"] as const).map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCategory(c)}
+              className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+                category === c
+                  ? "bg-[var(--text-main)] text-[var(--bg-color)]"
+                  : "border border-[var(--text-secondary)]/30 text-[var(--text-secondary)] hover:text-[var(--text-main)]"
+              }`}
+              style={fontPoppins}
+            >
+              {c === "daily" ? "Daily" : "Monthly Update"}
+            </button>
+          ))}
+        </div>
+
+        {/* Visibility toggle */}
+        <div className="flex gap-2 mb-6">
+          {(["public", "private"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setVisibility(v)}
+              className={`px-3 py-1.5 rounded-full text-sm capitalize transition-colors ${
+                visibility === v
+                  ? "bg-[var(--text-main)] text-[var(--bg-color)]"
+                  : "border border-[var(--text-secondary)]/30 text-[var(--text-secondary)] hover:text-[var(--text-main)]"
+              }`}
+              style={fontPoppins}
+            >
+              {v === "private" ? "🔒 Private" : "🌐 Public"}
+            </button>
+          ))}
+        </div>
+
         {/* Title */}
         <input
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Post title..."
+          placeholder={category === "monthly" ? "e.g. July 2026" : "Post title..."}
           className="w-full bg-transparent text-3xl sm:text-4xl font-light text-[var(--text-main)] placeholder-[var(--text-secondary)]/30 focus:outline-none mb-10"
           style={{ ...fontPlayfair, letterSpacing: "-0.02em" }}
         />
@@ -182,7 +243,7 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm"
+          accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime"
           onChange={handleFileUpload}
           className="hidden"
         />
@@ -294,6 +355,39 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
                 </div>
               )}
 
+              {/* YouTube Block */}
+              {block.type === "youtube" && (
+                <div className="rounded-lg overflow-hidden">
+                  {block.content ? (
+                    <div className="aspect-video">
+                      <iframe
+                        src={`https://www.youtube-nocookie.com/embed/${block.content}`}
+                        className="w-full h-full rounded-lg"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  ) : uploading === block.id ? (
+                    <div className="w-full h-48 bg-[var(--card-bg)] rounded-lg flex items-center justify-center">
+                      <div className="flex items-center gap-2 text-[var(--text-secondary)] text-sm" style={fontPoppins}>
+                        <div className="w-4 h-4 border-2 border-[var(--text-secondary)] border-t-transparent rounded-full animate-spin" />
+                        Uploading to YouTube...
+                      </div>
+                    </div>
+                  ) : null}
+                  {block.content && (
+                    <input
+                      type="text"
+                      value={block.caption || ""}
+                      onChange={(e) => updateBlock(block.id, { caption: e.target.value })}
+                      placeholder="Add a caption (optional)"
+                      className="w-full bg-transparent text-sm text-[var(--text-secondary)] placeholder-[var(--text-secondary)]/30 focus:outline-none mt-2 text-center italic"
+                      style={fontPoppins}
+                    />
+                  )}
+                </div>
+              )}
+
               {/* Remove block button */}
               {blocks.length > 1 && (
                 <button
@@ -328,6 +422,13 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
                   style={fontPoppins}
                 >
                   + Video
+                </button>
+                <button
+                  onClick={() => addBlock("youtube", index)}
+                  className="text-[10px] uppercase tracking-wider px-3 py-1.5 text-[var(--text-secondary)] hover:text-[var(--text-main)] border border-[var(--text-secondary)]/20 rounded hover:border-[var(--text-main)] transition-colors"
+                  style={fontPoppins}
+                >
+                  + YouTube
                 </button>
               </div>
             </div>

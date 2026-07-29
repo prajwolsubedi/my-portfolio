@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { Blog, BlogBlock } from "@/lib/types";
+import { formatDate } from "@/lib/blogUtils";
 import {
   BlogThemeProvider,
   useTheme,
@@ -60,6 +61,28 @@ function BlogBlockRenderer({ block }: { block: BlogBlock }) {
           )}
         </figure>
       );
+    case "youtube":
+      return (
+        <figure className="my-8">
+          <div className="aspect-video rounded-lg overflow-hidden">
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${block.content}`}
+              className="w-full h-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              loading="lazy"
+            />
+          </div>
+          {block.caption && (
+            <figcaption
+              className="text-center text-sm mt-3 italic"
+              style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}
+            >
+              {block.caption}
+            </figcaption>
+          )}
+        </figure>
+      );
     default:
       return null;
   }
@@ -88,14 +111,6 @@ function BlogPostContent() {
         setLoading(false);
       });
   }, [id]);
-
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
 
   const styles = blogThemeStyles(theme);
 

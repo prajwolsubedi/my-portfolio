@@ -3,6 +3,7 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs, addDoc, query, orderBy } from "firebase/firestore";
 import { isAuthenticated } from "@/lib/auth";
 import type { Blog } from "@/lib/types";
+import { isVisibleToPublic } from "@/lib/blogUtils";
 import { v4 as uuidv4 } from "uuid";
 
 // GET /api/blogs — public: published only; admin: all blogs
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
       ...doc.data(),
     })) as Blog[];
 
-    const blogs = showAll ? allBlogs : allBlogs.filter((b) => b.status === "published");
+    const blogs = showAll ? allBlogs : allBlogs.filter((b) => isVisibleToPublic(b));
 
     return NextResponse.json({ blogs });
   } catch (error) {
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, blocks, status } = body;
+    const { title, blocks, status, category, visibility } = body;
 
     if (!title || !blocks) {
       return NextResponse.json(
@@ -62,6 +63,8 @@ export async function POST(req: NextRequest) {
       title,
       blocks: processedBlocks,
       status: status || "draft",
+      category: category === "monthly" ? "monthly" : "daily",
+      visibility: visibility === "private" ? "private" : "public",
       createdAt: now,
       updatedAt: now,
     };

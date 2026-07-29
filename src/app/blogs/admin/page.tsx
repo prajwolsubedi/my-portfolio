@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import type { Blog } from "@/lib/types";
 import BlogEditor from "@/components/blog/BlogEditor";
+import { getBlogCategory, getBlogVisibility, isVisibleToPublic } from "@/lib/blogUtils";
 
 type View = "dashboard" | "editor";
 
@@ -18,6 +19,10 @@ export default function AdminPage() {
   const [view, setView] = useState<View>("dashboard");
   const [editingBlog, setEditingBlog] = useState<Blog | null>(null);
   const [filter, setFilter] = useState<"all" | "published" | "archived" | "draft">("all");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | "daily" | "monthly">("all");
+  const [visibilityFilter, setVisibilityFilter] = useState<"all" | "public" | "private">("all");
+  const [viewMode, setViewMode] = useState<"admin" | "audience">("admin");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Check auth on mount
   useEffect(() => {
@@ -114,7 +119,11 @@ export default function AdminPage() {
       day: "numeric",
     });
 
-  const filteredBlogs = filter === "all" ? blogs : blogs.filter((b) => b.status === filter);
+  const filteredBlogs = blogs
+    .filter((b) => filter === "all" || b.status === filter)
+    .filter((b) => categoryFilter === "all" || getBlogCategory(b) === categoryFilter)
+    .filter((b) => visibilityFilter === "all" || getBlogVisibility(b) === visibilityFilter)
+    .filter((b) => viewMode === "admin" || isVisibleToPublic(b));
 
   const fontPoppins = { fontFamily: "var(--font-poppins), Poppins, sans-serif" };
   const fontPlayfair = { fontFamily: "var(--font-playfair), Georgia, serif" };
@@ -187,6 +196,17 @@ export default function AdminPage() {
           </h1>
           <div className="flex items-center gap-3">
             <button
+              onClick={() => setViewMode((v) => (v === "admin" ? "audience" : "admin"))}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === "audience"
+                  ? "bg-[var(--text-main)] text-[var(--bg-color)]"
+                  : "border border-[var(--text-secondary)]/30 text-[var(--text-secondary)] hover:text-[var(--text-main)]"
+              }`}
+              style={fontPoppins}
+            >
+              {viewMode === "audience" ? "👁 Viewing as Audience" : "View as Audience"}
+            </button>
+            <button
               onClick={handleNewBlog}
               className="px-4 py-2 bg-[var(--text-main)] text-[var(--bg-color)] rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
               style={fontPoppins}
@@ -203,24 +223,87 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex gap-2 mb-8 flex-wrap">
-          {(["all", "published", "draft", "archived"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-full text-sm capitalize transition-colors ${
-                filter === f
-                  ? "bg-[var(--text-main)] text-[var(--bg-color)]"
-                  : "border border-[var(--text-secondary)]/30 text-[var(--text-secondary)] hover:text-[var(--text-main)]"
-              }`}
-              style={fontPoppins}
-            >
-              {f} {f !== "all" && `(${blogs.filter((b) => b.status === f).length})`}
-              {f === "all" && `(${blogs.length})`}
-            </button>
-          ))}
-        </div>
+        {/* Filters disclosure */}
+        <button
+          onClick={() => setFiltersOpen((v) => !v)}
+          className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)] hover:text-[var(--text-main)] transition-colors mb-4"
+          style={fontPoppins}
+        >
+          <span className={`inline-block transition-transform ${filtersOpen ? "rotate-90" : ""}`}>▸</span>
+          Filters
+          {(filter !== "all" || categoryFilter !== "all" || visibilityFilter !== "all") && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--text-main)] text-[var(--bg-color)]">
+              active
+            </span>
+          )}
+        </button>
+
+        {filtersOpen && (
+          <div className="space-y-3 mb-8">
+            {/* Status Filters */}
+            <div className="flex gap-2 flex-wrap">
+              {(["all", "published", "draft", "archived"] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-3 py-1.5 rounded-full text-sm capitalize transition-colors ${
+                    filter === f
+                      ? "bg-[var(--text-main)] text-[var(--bg-color)]"
+                      : "border border-[var(--text-secondary)]/30 text-[var(--text-secondary)] hover:text-[var(--text-main)]"
+                  }`}
+                  style={fontPoppins}
+                >
+                  {f} {f !== "all" && `(${blogs.filter((b) => b.status === f).length})`}
+                  {f === "all" && `(${blogs.length})`}
+                </button>
+              ))}
+            </div>
+
+            {/* Category Filters */}
+            <div className="flex gap-2 flex-wrap">
+              {(["all", "daily", "monthly"] as const).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCategoryFilter(c)}
+                  className={`px-3 py-1.5 rounded-full text-sm capitalize transition-colors ${
+                    categoryFilter === c
+                      ? "bg-[var(--text-main)] text-[var(--bg-color)]"
+                      : "border border-[var(--text-secondary)]/30 text-[var(--text-secondary)] hover:text-[var(--text-main)]"
+                  }`}
+                  style={fontPoppins}
+                >
+                  {c === "all"
+                    ? `All Types (${blogs.length})`
+                    : c === "daily"
+                    ? `Daily (${blogs.filter((b) => getBlogCategory(b) === "daily").length})`
+                    : `Monthly (${blogs.filter((b) => getBlogCategory(b) === "monthly").length})`}
+                </button>
+              ))}
+            </div>
+
+            {/* Visibility Filters */}
+            <div className="flex gap-2 flex-wrap">
+              {(["all", "public", "private"] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setVisibilityFilter(v)}
+                  className={`px-3 py-1.5 rounded-full text-sm capitalize transition-colors ${
+                    visibilityFilter === v
+                      ? "bg-[var(--text-main)] text-[var(--bg-color)]"
+                      : "border border-[var(--text-secondary)]/30 text-[var(--text-secondary)] hover:text-[var(--text-main)]"
+                  }`}
+                  style={fontPoppins}
+                >
+                  {v === "all"
+                    ? `All (${blogs.length})`
+                    : v === "public"
+                    ? `Public (${blogs.filter((b) => getBlogVisibility(b) === "public").length})`
+                    : `Private (${blogs.filter((b) => getBlogVisibility(b) === "private").length})`}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Blog List */}
         {loading ? (
@@ -254,6 +337,19 @@ export default function AdminPage() {
                     >
                       {blog.status}
                     </span>
+                    <span
+                      className={`inline-block text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium ${
+                        getBlogCategory(blog) === "monthly"
+                          ? "bg-purple-500/20 text-purple-400"
+                          : "bg-slate-500/20 text-slate-400"
+                      }`}
+                      style={fontPoppins}
+                    >
+                      {getBlogCategory(blog) === "monthly" ? "Monthly" : "Daily"}
+                    </span>
+                    <span title={getBlogVisibility(blog) === "private" ? "Private" : "Public"} className="text-xs">
+                      {getBlogVisibility(blog) === "private" ? "🔒" : "🌐"}
+                    </span>
                     <span className="text-xs text-[var(--text-secondary)]" style={fontPoppins}>
                       {formatDate(blog.createdAt)}
                     </span>
@@ -267,49 +363,51 @@ export default function AdminPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => handleEditBlog(blog)}
-                    className="text-xs px-3 py-1.5 border border-[var(--text-secondary)]/20 text-[var(--text-secondary)] rounded hover:text-[var(--text-main)] hover:border-[var(--text-main)] transition-colors"
-                    style={fontPoppins}
-                  >
-                    Edit
-                  </button>
-                  {blog.status !== "published" && (
+                {viewMode === "admin" && (
+                  <div className="flex items-center gap-2 shrink-0">
                     <button
-                      onClick={() => handleStatusChange(blog.id, "published")}
-                      className="text-xs px-3 py-1.5 border border-green-500/30 text-green-400 rounded hover:bg-green-500/20 transition-colors"
+                      onClick={() => handleEditBlog(blog)}
+                      className="text-xs px-3 py-1.5 border border-[var(--text-secondary)]/20 text-[var(--text-secondary)] rounded hover:text-[var(--text-main)] hover:border-[var(--text-main)] transition-colors"
                       style={fontPoppins}
                     >
-                      Publish
+                      Edit
                     </button>
-                  )}
-                  {blog.status === "published" && (
+                    {blog.status !== "published" && (
+                      <button
+                        onClick={() => handleStatusChange(blog.id, "published")}
+                        className="text-xs px-3 py-1.5 border border-green-500/30 text-green-400 rounded hover:bg-green-500/20 transition-colors"
+                        style={fontPoppins}
+                      >
+                        Publish
+                      </button>
+                    )}
+                    {blog.status === "published" && (
+                      <button
+                        onClick={() => handleStatusChange(blog.id, "archived")}
+                        className="text-xs px-3 py-1.5 border border-yellow-500/30 text-yellow-400 rounded hover:bg-yellow-500/20 transition-colors"
+                        style={fontPoppins}
+                      >
+                        Archive
+                      </button>
+                    )}
+                    {blog.status === "archived" && (
+                      <button
+                        onClick={() => handleStatusChange(blog.id, "published")}
+                        className="text-xs px-3 py-1.5 border border-green-500/30 text-green-400 rounded hover:bg-green-500/20 transition-colors"
+                        style={fontPoppins}
+                      >
+                        Unarchive
+                      </button>
+                    )}
                     <button
-                      onClick={() => handleStatusChange(blog.id, "archived")}
-                      className="text-xs px-3 py-1.5 border border-yellow-500/30 text-yellow-400 rounded hover:bg-yellow-500/20 transition-colors"
+                      onClick={() => handleDelete(blog.id)}
+                      className="text-xs px-3 py-1.5 border border-red-500/30 text-red-400 rounded hover:bg-red-500/20 transition-colors"
                       style={fontPoppins}
                     >
-                      Archive
+                      Delete
                     </button>
-                  )}
-                  {blog.status === "archived" && (
-                    <button
-                      onClick={() => handleStatusChange(blog.id, "published")}
-                      className="text-xs px-3 py-1.5 border border-green-500/30 text-green-400 rounded hover:bg-green-500/20 transition-colors"
-                      style={fontPoppins}
-                    >
-                      Unarchive
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleDelete(blog.id)}
-                    className="text-xs px-3 py-1.5 border border-red-500/30 text-red-400 rounded hover:bg-red-500/20 transition-colors"
-                    style={fontPoppins}
-                  >
-                    Delete
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

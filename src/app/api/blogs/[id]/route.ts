@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { isAuthenticated } from "@/lib/auth";
+import { isVisibleToPublic } from "@/lib/blogUtils";
+import type { Blog } from "@/lib/types";
 
 // GET /api/blogs/[id] — get a single blog
 export async function GET(
@@ -17,11 +19,11 @@ export async function GET(
       return NextResponse.json({ error: "Blog not found" }, { status: 404 });
     }
 
-    const blog = { id: docSnap.id, ...docSnap.data() } as { id: string; status: string; [key: string]: unknown };
+    const blog = { id: docSnap.id, ...docSnap.data() } as Blog;
 
-    // If blog is not published, only admins can view
+    // If blog is not visible to the public, only admins can view
     const authed = await isAuthenticated();
-    if (blog.status !== "published" && !authed) {
+    if (!isVisibleToPublic(blog) && !authed) {
       return NextResponse.json({ error: "Blog not found" }, { status: 404 });
     }
 
@@ -48,12 +50,14 @@ export async function PUT(
 
     const { id } = await params;
     const body = await req.json();
-    const { title, blocks, status } = body;
+    const { title, blocks, status, category, visibility } = body;
 
     const updateData: Record<string, unknown> = { updatedAt: Date.now() };
     if (title !== undefined) updateData.title = title;
     if (blocks !== undefined) updateData.blocks = blocks;
     if (status !== undefined) updateData.status = status;
+    if (category !== undefined) updateData.category = category;
+    if (visibility !== undefined) updateData.visibility = visibility;
 
     const docRef = doc(db, "blogs", id);
     await updateDoc(docRef, updateData);

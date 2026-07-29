@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Blog } from "@/lib/types";
+import { formatDate, formatMonthYear, getBlogCategory } from "@/lib/blogUtils";
 import {
   BlogThemeProvider,
   useTheme,
@@ -14,6 +15,7 @@ function BlogsContent() {
   const { theme } = useTheme();
   const [blogs, setBlogs] = useState<Blog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"daily" | "monthly">("daily");
 
   useEffect(() => {
     fetch("/api/blogs")
@@ -25,15 +27,17 @@ function BlogsContent() {
       .catch(() => setLoading(false));
   }, []);
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
-
   const styles = blogThemeStyles(theme);
+
+  const dailyBlogs = blogs.filter((b) => getBlogCategory(b) === "daily");
+  const monthlyBlogs = blogs.filter((b) => getBlogCategory(b) === "monthly");
+
+  const monthlyByYear = monthlyBlogs.reduce<Record<string, Blog[]>>((acc, b) => {
+    const year = new Date(b.createdAt).getFullYear().toString();
+    (acc[year] ||= []).push(b);
+    return acc;
+  }, {});
+  const years = Object.keys(monthlyByYear);
 
   return (
     <div className="min-h-screen transition-colors duration-300" style={{ ...styles, backgroundColor: "var(--blog-bg)" }}>
@@ -64,6 +68,25 @@ function BlogsContent() {
             <span className="ml-2 opacity-60">— {blogs.length} {blogs.length === 1 ? "post" : "posts"}</span>
           )}
         </p>
+
+        {/* Tabs */}
+        <div className="flex gap-6 mt-8" style={{ borderBottom: "1px solid var(--blog-border)" }}>
+          {(["daily", "monthly"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className="pb-3 text-sm transition-colors relative"
+              style={{
+                fontFamily: "var(--font-poppins), Poppins, sans-serif",
+                color: activeTab === tab ? "var(--blog-text)" : "var(--blog-text-secondary)",
+                borderBottom: activeTab === tab ? "2px solid var(--blog-hover)" : "2px solid transparent",
+                marginBottom: "-1px",
+              }}
+            >
+              {tab === "daily" ? "Blog" : "Monthly Updates"}
+            </button>
+          ))}
+        </div>
       </header>
 
       {/* Blog List */}
@@ -72,57 +95,82 @@ function BlogsContent() {
           <div className="py-20 text-center" style={{ color: "var(--blog-text-secondary)" }}>
             <div className="inline-block w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : blogs.length === 0 ? (
+        ) : activeTab === "daily" ? (
+          dailyBlogs.length === 0 ? (
+            <div className="py-20 text-center">
+              <p className="text-lg" style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}>
+                No posts yet. Check back soon.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-0">
+              {dailyBlogs.map((blog) => (
+                <Link
+                  key={blog.id}
+                  href={`/blogs/${blog.id}`}
+                  className="flex items-baseline justify-between gap-4 py-3 group"
+                  style={{ borderBottom: "1px solid var(--blog-border)" }}
+                >
+                  <h2
+                    className="text-base sm:text-lg font-light transition-colors truncate"
+                    style={{ fontFamily: "var(--font-playfair), Georgia, serif", color: "var(--blog-text)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--blog-hover)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--blog-text)")}
+                  >
+                    {blog.title}
+                  </h2>
+                  <time
+                    className="text-xs sm:text-sm shrink-0"
+                    style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}
+                  >
+                    {formatDate(blog.createdAt)}
+                  </time>
+                </Link>
+              ))}
+            </div>
+          )
+        ) : monthlyBlogs.length === 0 ? (
           <div className="py-20 text-center">
             <p className="text-lg" style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}>
-              No posts yet. Check back soon.
+              No monthly updates yet.
             </p>
           </div>
         ) : (
-          <div className="space-y-0">
-            {blogs.map((blog, index) => (
-              <Link
-                key={blog.id}
-                href={`/blogs/${blog.id}`}
-                className="block py-6 group"
-                style={{ borderBottom: "1px solid var(--blog-border)" }}
+          years.map((year) => (
+            <div key={year} className="mb-10">
+              <h3
+                className="text-sm mb-3 opacity-60"
+                style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}
               >
-                <article className="flex gap-4 items-start">
-                  {/* Blog number */}
-                  <span
-                    className="text-2xl sm:text-3xl font-light opacity-30 select-none shrink-0 w-8 text-right"
-                    style={{ fontFamily: "var(--font-playfair), Georgia, serif", color: "var(--blog-text)" }}
+                {year}
+              </h3>
+              <div className="space-y-0">
+                {monthlyByYear[year].map((blog) => (
+                  <Link
+                    key={blog.id}
+                    href={`/blogs/${blog.id}`}
+                    className="flex items-baseline justify-between gap-4 py-3 group"
+                    style={{ borderBottom: "1px solid var(--blog-border)" }}
                   >
-                    {String(blogs.length - index).padStart(2, "0")}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <time
-                      className="text-sm block mb-1.5"
-                      style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}
-                    >
-                      {formatDate(blog.createdAt)}
-                    </time>
-                    <h2
-                      className="text-xl sm:text-2xl font-light transition-colors"
+                    <span
+                      className="text-base sm:text-lg font-light transition-colors truncate"
                       style={{ fontFamily: "var(--font-playfair), Georgia, serif", color: "var(--blog-text)" }}
                       onMouseEnter={(e) => (e.currentTarget.style.color = "var(--blog-hover)")}
                       onMouseLeave={(e) => (e.currentTarget.style.color = "var(--blog-text)")}
                     >
                       {blog.title}
-                    </h2>
-                    {blog.blocks?.find((b) => b.type === "text") && (
-                      <p
-                        className="mt-2 text-sm line-clamp-2"
-                        style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}
-                      >
-                        {blog.blocks.find((b) => b.type === "text")!.content.slice(0, 200)}
-                      </p>
-                    )}
-                  </div>
-                </article>
-              </Link>
-            ))}
-          </div>
+                    </span>
+                    <time
+                      className="text-xs sm:text-sm shrink-0"
+                      style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}
+                    >
+                      {formatMonthYear(blog.createdAt)}
+                    </time>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))
         )}
       </main>
     </div>
