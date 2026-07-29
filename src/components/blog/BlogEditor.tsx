@@ -23,9 +23,14 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [pendingBlockType, setPendingBlockType] = useState<"image" | "video" | "youtube" | null>(null);
+  const [pendingBlockType, setPendingBlockType] = useState<"image" | "youtube" | null>(null);
   const [pendingInsertIndex, setPendingInsertIndex] = useState<number | null>(null);
   const [pendingYoutubeTitle, setPendingYoutubeTitle] = useState("");
+  const [youtubeModalOpen, setYoutubeModalOpen] = useState(false);
+  const [youtubeModalTitle, setYoutubeModalTitle] = useState("");
+  const [pendingYoutubeUploads, setPendingYoutubeUploads] = useState<
+    Record<string, { file: File; title: string; previewUrl: string }>
+  >({});
 
   const fontPoppins = { fontFamily: "var(--font-poppins), Poppins, sans-serif" };
   const fontPlayfair = { fontFamily: "var(--font-playfair), Georgia, serif" };
@@ -39,22 +44,26 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
   const removeBlock = (id: string) => {
     if (blocks.length <= 1) return;
     setBlocks((prev) => prev.filter((b) => b.id !== id));
+    setPendingYoutubeUploads((prev) => {
+      if (!prev[id]) return prev;
+      URL.revokeObjectURL(prev[id].previewUrl);
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
 
   const addBlock = (type: BlogBlock["type"], afterIndex: number) => {
-    if (type === "image" || type === "video") {
+    if (type === "image") {
       setPendingBlockType(type);
       setPendingInsertIndex(afterIndex);
       fileInputRef.current?.click();
       return;
     }
     if (type === "youtube") {
-      const videoTitle = window.prompt("YouTube video title:", title || "Blog video");
-      if (!videoTitle) return;
-      setPendingYoutubeTitle(videoTitle);
-      setPendingBlockType("youtube");
+      setYoutubeModalTitle(title || "Blog video");
       setPendingInsertIndex(afterIndex);
-      fileInputRef.current?.click();
+      setYoutubeModalOpen(true);
       return;
     }
     const newBlock: BlogBlock = { id: uuidv4(), type, content: "" };
@@ -65,11 +74,48 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
     });
   };
 
+  const confirmYoutubeTitle = () => {
+    const videoTitle = youtubeModalTitle.trim();
+    if (!videoTitle) return;
+    setPendingYoutubeTitle(videoTitle);
+    setPendingBlockType("youtube");
+    setYoutubeModalOpen(false);
+    fileInputRef.current?.click();
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || pendingBlockType === null || pendingInsertIndex === null) return;
 
     const blockId = uuidv4();
+
+    // YouTube uploads cost quota and take time, so stage the file with a
+    // local preview and require an explicit confirm instead of auto-uploading
+    // the moment a file is picked (easy to select the wrong clip otherwise).
+    if (pendingBlockType === "youtube") {
+      const previewUrl = URL.createObjectURL(file);
+      const placeholderBlock: BlogBlock = {
+        id: blockId,
+        type: "youtube",
+        content: "",
+        caption: pendingYoutubeTitle,
+      };
+      setBlocks((prev) => {
+        const next = [...prev];
+        next.splice(pendingInsertIndex + 1, 0, placeholderBlock);
+        return next;
+      });
+      setPendingYoutubeUploads((prev) => ({
+        ...prev,
+        [blockId]: { file, title: pendingYoutubeTitle, previewUrl },
+      }));
+      setPendingBlockType(null);
+      setPendingInsertIndex(null);
+      setPendingYoutubeTitle("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     const placeholderBlock: BlogBlock = {
       id: blockId,
       type: pendingBlockType,
@@ -88,19 +134,11 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
       const formData = new FormData();
       formData.append("file", file);
 
-      const isYoutube = pendingBlockType === "youtube";
-      if (isYoutube) formData.append("title", pendingYoutubeTitle);
-
-      const res = await fetch(isYoutube ? "/api/upload-youtube" : "/api/upload", {
-        method: "POST",
-        body: formData,
-      });
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
 
       if (res.ok) {
-        setBlocks((prev) =>
-          prev.map((b) => (b.id === blockId ? { ...b, content: isYoutube ? data.videoId : data.url } : b))
-        );
+        setBlocks((prev) => prev.map((b) => (b.id === blockId ? { ...b, content: data.url } : b)));
       } else {
         setBlocks((prev) => prev.filter((b) => b.id !== blockId));
         alert(data.error || "Upload failed");
@@ -113,9 +151,40 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
     setUploading(null);
     setPendingBlockType(null);
     setPendingInsertIndex(null);
-    setPendingYoutubeTitle("");
     // Reset file input
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const uploadPendingYoutube = async (blockId: string) => {
+    const pending = pendingYoutubeUploads[blockId];
+    if (!pending) return;
+
+    setUploading(blockId);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", pending.file);
+      formData.append("title", pending.title);
+
+      const res = await fetch("/api/upload-youtube", { method: "POST", body: formData });
+      const data = await res.json();
+
+      if (res.ok) {
+        setBlocks((prev) => prev.map((b) => (b.id === blockId ? { ...b, content: data.videoId } : b)));
+      } else {
+        alert(data.error || "Upload failed");
+      }
+    } catch {
+      alert("Upload failed");
+    }
+
+    URL.revokeObjectURL(pending.previewUrl);
+    setPendingYoutubeUploads((prev) => {
+      const next = { ...prev };
+      delete next[blockId];
+      return next;
+    });
+    setUploading(null);
   };
 
   const moveBlock = (index: number, direction: "up" | "down") => {
@@ -374,8 +443,25 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
                         Uploading to YouTube...
                       </div>
                     </div>
+                  ) : pendingYoutubeUploads[block.id] ? (
+                    <div className="space-y-2">
+                      <video
+                        src={pendingYoutubeUploads[block.id].previewUrl}
+                        controls
+                        className="w-full rounded-lg"
+                        preload="metadata"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => uploadPendingYoutube(block.id)}
+                        className="w-full py-2 bg-[var(--text-main)] text-[var(--bg-color)] rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+                        style={fontPoppins}
+                      >
+                        Upload to YouTube
+                      </button>
+                    </div>
                   ) : null}
-                  {block.content && (
+                  {(block.content || pendingYoutubeUploads[block.id]) && (
                     <input
                       type="text"
                       value={block.caption || ""}
@@ -417,13 +503,6 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
                   + Image
                 </button>
                 <button
-                  onClick={() => addBlock("video", index)}
-                  className="text-[10px] uppercase tracking-wider px-3 py-1.5 text-[var(--text-secondary)] hover:text-[var(--text-main)] border border-[var(--text-secondary)]/20 rounded hover:border-[var(--text-main)] transition-colors"
-                  style={fontPoppins}
-                >
-                  + Video
-                </button>
-                <button
                   onClick={() => addBlock("youtube", index)}
                   className="text-[10px] uppercase tracking-wider px-3 py-1.5 text-[var(--text-secondary)] hover:text-[var(--text-main)] border border-[var(--text-secondary)]/20 rounded hover:border-[var(--text-main)] transition-colors"
                   style={fontPoppins}
@@ -435,6 +514,45 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
           ))}
         </div>
       </div>
+
+      {/* YouTube title modal (replaces window.prompt, which iframes/some mobile browsers block) */}
+      {youtubeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
+          <div className="w-full max-w-sm bg-[var(--bg-color)] border border-[var(--text-secondary)]/20 rounded-lg p-6 space-y-4">
+            <h3 className="text-lg text-[var(--text-main)]" style={fontPlayfair}>
+              YouTube video title
+            </h3>
+            <input
+              type="text"
+              autoFocus
+              value={youtubeModalTitle}
+              onChange={(e) => setYoutubeModalTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") confirmYoutubeTitle();
+              }}
+              className="w-full bg-transparent border border-[var(--text-secondary)]/30 rounded-lg px-4 py-2 text-[var(--text-main)] focus:outline-none focus:border-[#a8d4f0]"
+              style={fontPoppins}
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setYoutubeModalOpen(false)}
+                className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-main)] transition-colors"
+                style={fontPoppins}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmYoutubeTitle}
+                disabled={!youtubeModalTitle.trim()}
+                className="px-4 py-2 bg-[var(--text-main)] text-[var(--bg-color)] rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={fontPoppins}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
