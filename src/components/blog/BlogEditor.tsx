@@ -3,23 +3,64 @@
 import { useState, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
 import type { Blog, BlogBlock } from "@/lib/types";
+import {
+  currentPeriodKey,
+  formatPeriod,
+  parsePeriodKey,
+  resolveBlogPeriod,
+} from "@/lib/blogUtils";
+import {
+  createHabitTracker,
+  moveTrackerToMonth,
+  parseHabitTracker,
+  serializeHabitTracker,
+} from "@/lib/habitUtils";
+import HabitTrackerGrid from "./HabitTracker";
 
 interface BlogEditorProps {
   blog: Blog | null;
   onDone: () => void;
+  /** Pre-fills a brand new post as a monthly update. */
+  preset?: "monthly" | null;
 }
 
-export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
-  const [title, setTitle] = useState(blog?.title || "");
-  const [category, setCategory] = useState<"daily" | "monthly">(
-    blog?.category === "monthly" ? "monthly" : "daily"
+/** A fresh, empty tracker pointed at the month the post covers. */
+function makeHabitsBlock(period: string): BlogBlock {
+  const now = new Date();
+  const { year, month } = parsePeriodKey(period) ?? {
+    year: now.getFullYear(),
+    month: now.getMonth(),
+  };
+  return {
+    id: uuidv4(),
+    type: "habits",
+    content: serializeHabitTracker(createHabitTracker(year, month)),
+  };
+}
+
+export default function BlogEditor({ blog, onDone, preset = null }: BlogEditorProps) {
+  const initialPeriod = blog ? resolveBlogPeriod(blog) : currentPeriodKey();
+  const initialCategory: "daily" | "monthly" = blog
+    ? blog.category === "monthly"
+      ? "monthly"
+      : "daily"
+    : preset === "monthly"
+    ? "monthly"
+    : "daily";
+
+  const [title, setTitle] = useState(
+    blog?.title || (preset === "monthly" ? formatPeriod(initialPeriod) : "")
   );
+  const [category, setCategory] = useState<"daily" | "monthly">(initialCategory);
+  const [period, setPeriod] = useState(initialPeriod);
   const [visibility, setVisibility] = useState<"public" | "private">(
     blog?.visibility === "private" ? "private" : "public"
   );
-  const [blocks, setBlocks] = useState<BlogBlock[]>(
-    blog?.blocks || [{ id: uuidv4(), type: "text", content: "" }]
-  );
+  const [blocks, setBlocks] = useState<BlogBlock[]>(() => {
+    if (blog?.blocks) return blog.blocks;
+    const first: BlogBlock = { id: uuidv4(), type: "text", content: "" };
+    return preset === "monthly" ? [first, makeHabitsBlock(initialPeriod)] : [first];
+  });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,12 +107,47 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
       setYoutubeModalOpen(true);
       return;
     }
-    const newBlock: BlogBlock = { id: uuidv4(), type, content: "" };
+    const newBlock: BlogBlock =
+      type === "habits" ? makeHabitsBlock(period) : { id: uuidv4(), type, content: "" };
     setBlocks((prev) => {
       const next = [...prev];
       next.splice(afterIndex + 1, 0, newBlock);
       return next;
     });
+  };
+
+  // Monthly updates get a tracker by default — it's the point of the section.
+  const handleCategoryChange = (next: "daily" | "monthly") => {
+    setCategory(next);
+    if (next !== "monthly") return;
+    if (!title.trim()) setTitle(formatPeriod(period));
+    setBlocks((prev) =>
+      prev.some((b) => b.type === "habits") ? prev : [...prev, makeHabitsBlock(period)]
+    );
+  };
+
+  const handlePeriodChange = (next: string) => {
+    const parsed = parsePeriodKey(next);
+    if (!parsed) return;
+    // Keep an auto-generated title ("July 2026") in step with the month.
+    if (title.trim() === formatPeriod(period)) setTitle(formatPeriod(next));
+    setPeriod(next);
+    setBlocks((prev) =>
+      prev.map((b) =>
+        b.type === "habits"
+          ? {
+              ...b,
+              content: serializeHabitTracker(
+                moveTrackerToMonth(
+                  parseHabitTracker(b.content, parsed.year, parsed.month),
+                  parsed.year,
+                  parsed.month
+                )
+              ),
+            }
+          : b
+      )
+    );
   };
 
   const confirmYoutubeTitle = () => {
@@ -212,7 +288,14 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), blocks, status, category, visibility }),
+        body: JSON.stringify({
+          title: title.trim(),
+          blocks,
+          status,
+          category,
+          visibility,
+          ...(category === "monthly" ? { period } : {}),
+        }),
       });
 
       if (res.ok) {
@@ -229,8 +312,8 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-color)] px-6 py-8">
-      <div className="max-w-[720px] mx-auto">
+    <div className="min-h-screen bg-[var(--bg-color)] py-8">
+      <div className="blog-shell">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <button
@@ -261,12 +344,12 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
         </div>
 
         {/* Category toggle */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-6 items-center flex-wrap">
           {(["daily", "monthly"] as const).map((c) => (
             <button
               key={c}
               type="button"
-              onClick={() => setCategory(c)}
+              onClick={() => handleCategoryChange(c)}
               className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
                 category === c
                   ? "bg-[var(--text-main)] text-[var(--bg-color)]"
@@ -277,6 +360,21 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
               {c === "daily" ? "Daily" : "Monthly Update"}
             </button>
           ))}
+          {category === "monthly" && (
+            <label
+              className="flex items-center gap-2 text-sm text-[var(--text-secondary)] ml-1"
+              style={fontPoppins}
+            >
+              <span className="text-[10px] uppercase tracking-wider">Month</span>
+              <input
+                type="month"
+                value={period}
+                onChange={(e) => handlePeriodChange(e.target.value)}
+                className="bg-transparent border border-[var(--text-secondary)]/30 rounded-full px-3 py-1 text-sm text-[var(--text-main)] focus:outline-none focus:border-[#a8d4f0]"
+                style={fontPoppins}
+              />
+            </label>
+          )}
         </div>
 
         {/* Visibility toggle */}
@@ -472,6 +570,21 @@ export default function BlogEditor({ blog, onDone }: BlogEditorProps) {
                     />
                   )}
                 </div>
+              )}
+
+              {/* Habit Tracker Block */}
+              {block.type === "habits" && (
+                <HabitTrackerGrid
+                  variant="admin"
+                  tracker={parseHabitTracker(
+                    block.content,
+                    parsePeriodKey(period)?.year ?? new Date().getFullYear(),
+                    parsePeriodKey(period)?.month ?? new Date().getMonth()
+                  )}
+                  onChange={(next) =>
+                    updateBlock(block.id, { content: serializeHabitTracker(next) })
+                  }
+                />
               )}
 
               {/* Remove block button */}

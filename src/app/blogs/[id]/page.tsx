@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { Blog, BlogBlock } from "@/lib/types";
-import { formatDate } from "@/lib/blogUtils";
+import {
+  formatDate,
+  formatPeriod,
+  getBlogCategory,
+  parsePeriodKey,
+  resolveBlogPeriod,
+} from "@/lib/blogUtils";
+import { parseHabitTracker, serializeHabitTracker } from "@/lib/habitUtils";
+import HabitTrackerGrid from "@/components/blog/HabitTracker";
 import {
   BlogThemeProvider,
   useTheme,
@@ -12,7 +20,14 @@ import {
   blogThemeStyles,
 } from "@/components/blog/ThemeToggle";
 
-function BlogBlockRenderer({ block }: { block: BlogBlock }) {
+interface BlockRendererProps {
+  block: BlogBlock;
+  period: string;
+  editable: boolean;
+  onContentChange: (blockId: string, content: string) => void;
+}
+
+function BlogBlockRenderer({ block, period, editable, onContentChange }: BlockRendererProps) {
   switch (block.type) {
     case "text":
       return (
@@ -83,6 +98,25 @@ function BlogBlockRenderer({ block }: { block: BlogBlock }) {
           )}
         </figure>
       );
+    case "habits": {
+      const now = new Date();
+      const fallback = parsePeriodKey(period) ?? {
+        year: now.getFullYear(),
+        month: now.getMonth(),
+      };
+      return (
+        <HabitTrackerGrid
+          variant="public"
+          tracker={parseHabitTracker(block.content, fallback.year, fallback.month)}
+          readOnly={!editable}
+          onChange={
+            editable
+              ? (next) => onContentChange(block.id, serializeHabitTracker(next))
+              : undefined
+          }
+        />
+      );
+    }
     default:
       return null;
   }
@@ -95,6 +129,11 @@ function BlogPostContent() {
   const [blog, setBlog] = useState<Blog | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [authed, setAuthed] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingBlocks = useRef<BlogBlock[] | null>(null);
 
   useEffect(() => {
     fetch(`/api/blogs/${id}`)
@@ -111,6 +150,47 @@ function BlogPostContent() {
         setLoading(false);
       });
   }, [id]);
+
+  // Logged in? Then habits are tickable straight from the post — no detour
+  // through the editor just to check off a day.
+  useEffect(() => {
+    fetch("/api/auth/check")
+      .then((r) => r.json())
+      .then((d) => setAuthed(!!d.authenticated))
+      .catch(() => setAuthed(false));
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, []);
+
+  const handleContentChange = (blockId: string, content: string) => {
+    if (!blog) return;
+
+    const nextBlocks = blog.blocks.map((b) =>
+      b.id === blockId ? { ...b, content } : b
+    );
+    setBlog({ ...blog, blocks: nextBlocks });
+    pendingBlocks.current = nextBlocks;
+    setSaveState("saving");
+
+    // Debounced so ticking a run of days is one write, not ten.
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/blogs/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ blocks: pendingBlocks.current }),
+        });
+        setSaveState(res.ok ? "saved" : "error");
+      } catch {
+        setSaveState("error");
+      }
+    }, 600);
+  };
 
   const styles = blogThemeStyles(theme);
 
@@ -139,9 +219,20 @@ function BlogPostContent() {
     );
   }
 
+  const isMonthly = getBlogCategory(blog) === "monthly";
+  const period = resolveBlogPeriod(blog);
+  const saveLabel =
+    saveState === "saving"
+      ? "Saving…"
+      : saveState === "saved"
+      ? "Saved"
+      : saveState === "error"
+      ? "Couldn't save"
+      : "";
+
   return (
     <div className="min-h-screen transition-colors duration-300" style={{ ...styles, backgroundColor: "var(--blog-bg)" }}>
-      <article className="max-w-[720px] mx-auto px-6 pt-12 pb-20">
+      <article className="blog-shell pt-12 pb-20">
         {/* Navigation */}
         <div className="flex items-center justify-between">
           <Link
@@ -151,7 +242,35 @@ function BlogPostContent() {
           >
             ← Back to Blog
           </Link>
-          <ThemeToggleButton />
+          <div className="flex items-center gap-3">
+            {authed && (
+              <>
+                {saveLabel && (
+                  <span
+                    className="text-xs"
+                    style={{
+                      fontFamily: "var(--font-poppins), Poppins, sans-serif",
+                      color: saveState === "error" ? "#f87171" : "var(--blog-text-secondary)",
+                    }}
+                  >
+                    {saveLabel}
+                  </span>
+                )}
+                <Link
+                  href={`/blogs/admin?edit=${blog.id}`}
+                  className="text-xs px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80"
+                  style={{
+                    fontFamily: "var(--font-poppins), Poppins, sans-serif",
+                    color: "var(--blog-hover)",
+                    border: "1px solid var(--blog-border)",
+                  }}
+                >
+                  Edit post
+                </Link>
+              </>
+            )}
+            <ThemeToggleButton />
+          </div>
         </div>
 
         {/* Title */}
@@ -167,13 +286,19 @@ function BlogPostContent() {
           className="text-sm block mb-12"
           style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}
         >
-          {formatDate(blog.createdAt)}
+          {isMonthly ? formatPeriod(period) : formatDate(blog.createdAt)}
         </time>
 
         {/* Content Blocks */}
         <div className="space-y-6">
           {blog.blocks.map((block) => (
-            <BlogBlockRenderer key={block.id} block={block} />
+            <BlogBlockRenderer
+              key={block.id}
+              block={block}
+              period={period}
+              editable={authed}
+              onContentChange={handleContentChange}
+            />
           ))}
         </div>
       </article>

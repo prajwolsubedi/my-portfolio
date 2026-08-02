@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { isAuthenticated } from "@/lib/auth";
-import { isVisibleToPublic } from "@/lib/blogUtils";
+import { isVisibleToPublic, parsePeriodKey } from "@/lib/blogUtils";
 import type { Blog } from "@/lib/types";
 
 // GET /api/blogs/[id] — get a single blog
@@ -50,7 +50,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await req.json();
-    const { title, blocks, status, category, visibility } = body;
+    const { title, blocks, status, category, visibility, period } = body;
 
     const updateData: Record<string, unknown> = { updatedAt: Date.now() };
     if (title !== undefined) updateData.title = title;
@@ -58,6 +58,7 @@ export async function PUT(
     if (status !== undefined) updateData.status = status;
     if (category !== undefined) updateData.category = category;
     if (visibility !== undefined) updateData.visibility = visibility;
+    if (parsePeriodKey(period)) updateData.period = period;
 
     const docRef = doc(db, "blogs", id);
     await updateDoc(docRef, updateData);

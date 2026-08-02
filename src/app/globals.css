@@ -36,6 +36,16 @@ h6 {
   font-family: var(--font-serif);
 }
 
+/* Shared column for every blog surface — list, post, editor, admin. Grows with
+   the viewport instead of sitting at a fixed width, and scales its own gutters,
+   so wide screens get the room the habit grid needs. */
+.blog-shell {
+  width: 100%;
+  margin-inline: auto;
+  max-width: clamp(720px, 92vw, 1760px);
+  padding-inline: clamp(1.5rem, 3vw, 4rem);
+}
+
 /* Christmas Snowfall Animation - Remove after Christmas */
 @keyframes snowfall {
   0% {

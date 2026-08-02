@@ -1,10 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import type { Blog } from "@/lib/types";
 import BlogEditor from "@/components/blog/BlogEditor";
-import { getBlogCategory, getBlogVisibility } from "@/lib/blogUtils";
+import MonthlyUpdateReminder from "@/components/blog/MonthlyUpdateReminder";
+import HabitTrackerModal from "@/components/blog/HabitTrackerModal";
+import {
+  currentPeriodKey,
+  findMonthlyBlogForPeriod,
+  getBlogCategory,
+  getBlogVisibility,
+} from "@/lib/blogUtils";
 
 type View = "dashboard" | "editor";
 
@@ -19,8 +26,12 @@ export default function AdminPage() {
 
   const [blogs, setBlogs] = useState<Blog[]>([]);
   const [loading, setLoading] = useState(false);
+  const [blogsLoaded, setBlogsLoaded] = useState(false);
   const [view, setView] = useState<View>("dashboard");
   const [editingBlog, setEditingBlog] = useState<Blog | null>(null);
+  const [editorPreset, setEditorPreset] = useState<"monthly" | null>(null);
+  const [habitsOpen, setHabitsOpen] = useState(false);
+  const deepLinkHandled = useRef(false);
   const [filter, setFilter] = useState<"all" | "published" | "archived" | "draft">("all");
   const [categoryFilter, setCategoryFilter] = useState<"all" | "daily" | "monthly">("all");
   const [visibilityFilter, setVisibilityFilter] = useState<"all" | "public" | "private">("all");
@@ -45,6 +56,7 @@ export default function AdminPage() {
       .then((r) => r.json())
       .then((d) => {
         setBlogs(d.blogs || []);
+        setBlogsLoaded(true);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -133,19 +145,98 @@ export default function AdminPage() {
 
   const handleNewBlog = () => {
     setEditingBlog(null);
+    setEditorPreset(null);
     setView("editor");
   };
 
   const handleEditBlog = (blog: Blog) => {
     setEditingBlog(blog);
+    setEditorPreset(null);
     setView("editor");
   };
 
   const handleEditorDone = () => {
     setView("dashboard");
     setEditingBlog(null);
+    setEditorPreset(null);
     fetchBlogs();
   };
+
+  // Jump straight into this month's update, creating it if it doesn't exist yet.
+  const openThisMonth = useCallback(() => {
+    const existing = findMonthlyBlogForPeriod(blogs, currentPeriodKey());
+    setEditingBlog(existing ?? null);
+    setEditorPreset(existing ? null : "monthly");
+    setView("editor");
+  }, [blogs]);
+
+  // Shortcut links: /blogs/admin?new=monthly and /blogs/admin?edit=<id>. Read
+  // from the URL directly so the page needs no Suspense boundary, and wait for
+  // the blog list so ?edit= can resolve to a post.
+  useEffect(() => {
+    if (!authenticated || !blogsLoaded || deepLinkHandled.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const edit = params.get("edit");
+    const create = params.get("new");
+    if (!edit && !create) return;
+
+    deepLinkHandled.current = true;
+    // Drop the params so a refresh doesn't reopen the editor.
+    window.history.replaceState({}, "", window.location.pathname);
+
+    if (create === "monthly") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- opening the editor is driven by the URL, an external source
+      openThisMonth();
+      return;
+    }
+    const target = blogs.find((b) => b.id === edit);
+    if (target) handleEditBlog(target);
+  }, [authenticated, blogsLoaded, blogs, openThisMonth]);
+
+  const closeHabits = useCallback(() => {
+    setHabitsOpen(false);
+    fetchBlogs();
+  }, [fetchBlogs]);
+
+  const startMonthlyFromHabits = useCallback(() => {
+    setHabitsOpen(false);
+    openThisMonth();
+  }, [openThisMonth]);
+
+  // Dashboard keyboard shortcuts: M = this month's update, N = new post,
+  // H = habit tracker.
+  useEffect(() => {
+    if (!authenticated || view !== "dashboard" || habitsOpen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      ) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      if (key === "m") {
+        e.preventDefault();
+        openThisMonth();
+      } else if (key === "n") {
+        e.preventDefault();
+        setEditingBlog(null);
+        setEditorPreset(null);
+        setView("editor");
+      } else if (key === "h") {
+        e.preventDefault();
+        setHabitsOpen(true);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [authenticated, view, habitsOpen, openThisMonth]);
 
   const formatDate = (ts: number) =>
     new Date(ts).toLocaleDateString("en-US", {
@@ -263,13 +354,15 @@ export default function AdminPage() {
 
   // Editor view
   if (view === "editor") {
-    return <BlogEditor blog={editingBlog} onDone={handleEditorDone} />;
+    return (
+      <BlogEditor blog={editingBlog} onDone={handleEditorDone} preset={editorPreset} />
+    );
   }
 
   // Dashboard
   return (
-    <div className="min-h-screen bg-[var(--bg-color)] px-6 py-8">
-      <div className="max-w-[900px] mx-auto">
+    <div className="min-h-screen bg-[var(--bg-color)] py-8">
+      <div className="blog-shell">
         {/* Header */}
         <div className="flex items-center justify-between mb-10">
           <h1
@@ -291,9 +384,38 @@ export default function AdminPage() {
               {viewMode === "audience" ? "👁 Viewing as Audience" : "View as Audience"}
             </button>
             <button
+              onClick={() => setHabitsOpen(true)}
+              className="p-2 rounded-lg border border-[#a8d4f0]/40 text-[#a8d4f0] hover:bg-[#a8d4f0]/10 transition-colors"
+              title="Habit tracker (H)"
+              aria-label="Open habit tracker"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="9 11 12 14 22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+            </button>
+            <button
+              onClick={openThisMonth}
+              className="px-4 py-2 border border-[#a8d4f0]/40 text-[#a8d4f0] rounded-lg text-sm font-medium hover:bg-[#a8d4f0]/10 transition-colors"
+              style={fontPoppins}
+              title="Open this month's update (M)"
+            >
+              This Month
+            </button>
+            <button
               onClick={handleNewBlog}
               className="px-4 py-2 bg-[var(--text-main)] text-[var(--bg-color)] rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
               style={fontPoppins}
+              title="New post (N)"
             >
               + New Post
             </button>
@@ -306,6 +428,25 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
+
+        {/* Keyboard shortcuts */}
+        <p
+          className="hidden sm:block text-[11px] text-[var(--text-secondary)]/60 -mt-6 mb-8"
+          style={fontPoppins}
+        >
+          Shortcuts: <kbd className="font-medium">M</kbd> this month&apos;s update ·{" "}
+          <kbd className="font-medium">H</kbd> habit tracker ·{" "}
+          <kbd className="font-medium">N</kbd> new post
+        </p>
+
+        {/* Monthly update nudge */}
+        {blogsLoaded && (
+          <MonthlyUpdateReminder
+            blogs={blogs}
+            onStart={openThisMonth}
+            onContinue={handleEditBlog}
+          />
+        )}
 
         {/* Filters disclosure */}
         <button
@@ -509,6 +650,14 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+      {habitsOpen && (
+        <HabitTrackerModal
+          blog={findMonthlyBlogForPeriod(blogs, currentPeriodKey()) ?? null}
+          onClose={closeHabits}
+          onCreateUpdate={startMonthlyFromHabits}
+        />
+      )}
     </div>
   );
 }

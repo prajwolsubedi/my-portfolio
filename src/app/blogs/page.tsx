@@ -27,6 +27,23 @@ function BlogsContent() {
       .catch(() => setLoading(false));
   }, []);
 
+  // /blogs?tab=monthly opens straight on the Monthly Updates tab. Read from the
+  // URL rather than useSearchParams so the page needs no Suspense boundary.
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the URL is external state, absent from the prerendered page
+    if (tab === "monthly" || tab === "daily") setActiveTab(tab);
+  }, []);
+
+  const selectTab = (tab: "daily" | "monthly") => {
+    setActiveTab(tab);
+    window.history.replaceState(
+      {},
+      "",
+      tab === "monthly" ? "?tab=monthly" : window.location.pathname
+    );
+  };
+
   const styles = blogThemeStyles(theme);
 
   const dailyBlogs = blogs.filter((b) => getBlogCategory(b) === "daily");
@@ -42,7 +59,7 @@ function BlogsContent() {
   return (
     <div className="min-h-screen transition-colors duration-300" style={{ ...styles, backgroundColor: "var(--blog-bg)" }}>
       {/* Header */}
-      <header className="pt-12 pb-8 px-6 max-w-[720px] mx-auto">
+      <header className="blog-shell pt-12 pb-8">
         <div className="flex items-center justify-between">
           <Link
             href="/"
@@ -74,7 +91,7 @@ function BlogsContent() {
           {(["daily", "monthly"] as const).map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => selectTab(tab)}
               className="pb-3 text-sm transition-colors relative"
               style={{
                 fontFamily: "var(--font-poppins), Poppins, sans-serif",
@@ -90,7 +107,7 @@ function BlogsContent() {
       </header>
 
       {/* Blog List */}
-      <main className="px-6 pb-20 max-w-[720px] mx-auto">
+      <main className="blog-shell pb-20">
         {loading ? (
           <div className="py-20 text-center" style={{ color: "var(--blog-text-secondary)" }}>
             <div className="inline-block w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />

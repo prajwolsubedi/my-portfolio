@@ -3,7 +3,7 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs, addDoc, query, orderBy } from "firebase/firestore";
 import { isAuthenticated } from "@/lib/auth";
 import type { Blog } from "@/lib/types";
-import { isVisibleToPublic } from "@/lib/blogUtils";
+import { currentPeriodKey, isVisibleToPublic, parsePeriodKey } from "@/lib/blogUtils";
 import { v4 as uuidv4 } from "uuid";
 
 // GET /api/blogs — public: published only; admin: all blogs
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, blocks, status, category, visibility } = body;
+    const { title, blocks, status, category, visibility, period } = body;
 
     if (!title || !blocks) {
       return NextResponse.json(
@@ -59,12 +59,17 @@ export async function POST(req: NextRequest) {
     );
 
     const now = Date.now();
+    const normalizedCategory = category === "monthly" ? "monthly" : "daily";
     const blogData = {
       title,
       blocks: processedBlocks,
       status: status || "draft",
-      category: category === "monthly" ? "monthly" : "daily",
+      category: normalizedCategory,
       visibility: visibility === "private" ? "private" : "public",
+      // Only monthly updates belong to a month; default to the current one.
+      ...(normalizedCategory === "monthly"
+        ? { period: parsePeriodKey(period) ? period : currentPeriodKey() }
+        : {}),
       createdAt: now,
       updatedAt: now,
     };
