@@ -19,6 +19,7 @@ import {
   ratingLabel,
   setRatingLabel,
   toggleHabitDay,
+  toggleHabitVisibility,
   trackerTotals,
   updateDayLog,
 } from "@/lib/habitUtils";
@@ -104,8 +105,16 @@ export default function HabitTrackerGrid({
       ? now.getDate()
       : null;
 
-  const { done, possible, daysLogged } = trackerTotals(tracker);
-  const hasHabits = tracker.habits.length > 0;
+  // A hidden habit drops out of the grid itself — for the admin too, not just
+  // readers. Clicking the eye icon needs a visible, immediate effect or it
+  // reads as broken; toggling it back on happens from the chip strip below,
+  // which lists every habit regardless of hidden state. Filtering here is
+  // also a defense-in-depth backstop for readers — the real barrier is the
+  // server never sending a hidden habit's data to a signed-out request.
+  const tableHabits = tracker.habits.filter((h) => !h.hidden);
+  const tableTracker = { ...tracker, habits: tableHabits };
+  const { done, possible, daysLogged } = trackerTotals(tableTracker);
+  const hasHabits = tableHabits.length > 0;
   const todayTint = `color-mix(in srgb, ${palette.accent} 9%, ${palette.surface})`;
 
   // Stable so React only runs it on mount. Sizing all 31 notes on every render
@@ -143,6 +152,10 @@ export default function HabitTrackerGrid({
     });
   };
 
+  const toggleVisibility = (habitId: string) => {
+    onChange?.(toggleHabitVisibility(tracker, habitId));
+  };
+
   // Drag-to-reorder lives only on the chip strip below the grid, not on the
   // table's own headers — dragIndex tracks which chip is mid-drag so it can
   // be dimmed, and the drop target just needs to know its own index.
@@ -168,7 +181,7 @@ export default function HabitTrackerGrid({
     setDragIndex(null);
   };
 
-  if (!editable && isTrackerEmpty(tracker)) return null;
+  if (!editable && isTrackerEmpty(tableTracker)) return null;
 
   return (
     <section
@@ -216,7 +229,7 @@ export default function HabitTrackerGrid({
                 Day
               </th>
 
-              {tracker.habits.map((habit) => (
+              {tableHabits.map((habit) => (
                 <th
                   key={habit.id}
                   title={habit.name || "Untitled habit"}
@@ -314,7 +327,7 @@ export default function HabitTrackerGrid({
                     </span>
                   </td>
 
-                  {tracker.habits.map((habit) => {
+                  {tableHabits.map((habit) => {
                     const marked = habit.days.includes(day);
                     // A dash appears only once a day is both unfilled and past
                     // its one-day grace period — checking it later clears the
@@ -364,7 +377,7 @@ export default function HabitTrackerGrid({
                       className="px-3 py-2.5 text-center text-xs sm:text-sm tabular-nums"
                       style={{ color: palette.muted, borderBottom: `1px solid ${palette.border}` }}
                     >
-                      {dayDoneCount(tracker, day)}
+                      {dayDoneCount(tableTracker, day)}
                     </td>
                   )}
 
@@ -427,7 +440,7 @@ export default function HabitTrackerGrid({
                 >
                   Total
                 </td>
-                {tracker.habits.map((habit) => (
+                {tableHabits.map((habit) => (
                   <td
                     key={habit.id}
                     className="px-0 py-3.5 text-center text-xs sm:text-sm tabular-nums"
@@ -480,11 +493,14 @@ export default function HabitTrackerGrid({
             >
               Habits
             </p>
-          {hasHabits && (
+          {tracker.habits.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {/* Numbered in table-column order — habit 1 here is the first
                   column in the grid above. Drag the grip to reorder; the whole
-                  chip is the drop target so you don't need to aim precisely. */}
+                  chip is the drop target so you don't need to aim precisely.
+                  Lists every habit, hidden or not — this is the only place a
+                  hidden one can be managed since it drops out of the grid
+                  itself. */}
               {tracker.habits.map((habit, index) => (
                 <div
                   key={habit.id}
@@ -493,7 +509,7 @@ export default function HabitTrackerGrid({
                   className="flex items-center gap-1.5 rounded-full pl-1.5 pr-1.5 py-1 transition-opacity"
                   style={{
                     border: `1px solid ${palette.border}`,
-                    opacity: dragIndex === index ? 0.4 : 1,
+                    opacity: dragIndex === index ? 0.4 : habit.hidden ? 0.55 : 1,
                   }}
                 >
                   {/* Decorative drag handle — native HTML5 drag has no
@@ -533,6 +549,25 @@ export default function HabitTrackerGrid({
                     style={{ color: palette.text }}
                     aria-label={`Habit ${index + 1} name`}
                   />
+                  <button
+                    type="button"
+                    onClick={() => toggleVisibility(habit.id)}
+                    className="shrink-0 px-0.5 opacity-60 hover:opacity-100 transition-opacity"
+                    style={{ color: palette.muted }}
+                    title={
+                      habit.hidden
+                        ? `Hidden from readers — show ${habit.name || "habit"}`
+                        : `Visible to readers — hide ${habit.name || "habit"}`
+                    }
+                    aria-label={
+                      habit.hidden
+                        ? `Show ${habit.name || "habit"} to readers`
+                        : `Hide ${habit.name || "habit"} from readers`
+                    }
+                    aria-pressed={!!habit.hidden}
+                  >
+                    {habit.hidden ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
                   <button
                     type="button"
                     onClick={() => removeHabit(habit.id)}
@@ -619,6 +654,36 @@ export default function HabitTrackerGrid({
 function fitToContent(el: HTMLTextAreaElement) {
   el.style.height = "auto";
   el.style.height = `${el.scrollHeight}px`;
+}
+
+function EyeIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-5.94M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M1 1l22 22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 function RatingScore({

@@ -9,6 +9,7 @@ export interface Habit {
   id: string;
   name: string;
   days: number[]; // days of the month (1-31) marked done
+  hidden?: boolean; // true hides this habit's column from public readers
 }
 
 /** How a single day went, beyond the habit checkboxes. */

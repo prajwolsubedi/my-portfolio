@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, addDoc, query, orderBy } from "firebase/firestore";
+import { collection, addDoc } from "firebase/firestore";
 import { isAuthenticated } from "@/lib/auth";
-import type { Blog } from "@/lib/types";
+import { BLOGS_TAG, listBlogs } from "@/lib/blogStore";
 import { currentPeriodKey, isVisibleToPublic, parsePeriodKey } from "@/lib/blogUtils";
 import { v4 as uuidv4 } from "uuid";
 
@@ -12,14 +13,9 @@ export async function GET(req: NextRequest) {
     const authed = await isAuthenticated();
     const showAll = req.nextUrl.searchParams.get("all") === "true" && authed;
 
-    // Fetch all blogs sorted by createdAt (avoids needing a composite index)
-    const q = query(collection(db, "blogs"), orderBy("createdAt", "desc"));
-    const snapshot = await getDocs(q);
-    const allBlogs: Blog[] = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Blog[];
-
+    // The blog pages read Firestore directly now; this endpoint is left for the
+    // admin dashboard, which needs drafts and full block content to edit.
+    const allBlogs = await listBlogs();
     const blogs = showAll ? allBlogs : allBlogs.filter((b) => isVisibleToPublic(b));
 
     return NextResponse.json({ blogs });
@@ -75,6 +71,10 @@ export async function POST(req: NextRequest) {
     };
 
     const docRef = await addDoc(collection(db, "blogs"), blogData);
+
+    // The blog pages are cached; without this a new post wouldn't appear until
+    // the hourly backstop expired.
+    revalidateTag(BLOGS_TAG, "max");
 
     return NextResponse.json({
       success: true,

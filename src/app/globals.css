@@ -19,6 +19,47 @@
   --font-serif: var(--font-playfair), ui-serif, Georgia, serif;
 }
 
+/* Blog theme.
+   These live in CSS rather than in React state because the blog pages are
+   server-rendered: the HTML arrives with content already painted, so a theme
+   resolved after hydration would flash the wrong colours first. The
+   `data-blog-theme` attribute is set on <html> by a blocking script in the blog
+   layout, before the browser paints anything. */
+:root,
+[data-blog-theme="dark"] {
+  --blog-bg: #0f0f0f;
+  --blog-text: #fffbf7;
+  --blog-text-secondary: #94a3b8;
+  --blog-border: rgba(148, 163, 184, 0.1);
+  --blog-card: #1a1a1a;
+  --blog-hover: #a8d4f0;
+  --blog-toggle-border: rgba(148, 163, 184, 0.3);
+  --blog-toggle-text: #94a3b8;
+}
+
+[data-blog-theme="light"] {
+  --blog-bg: #fafafa;
+  --blog-text: #1a1a1a;
+  --blog-text-secondary: #6b7280;
+  --blog-border: rgba(0, 0, 0, 0.08);
+  --blog-card: #ffffff;
+  --blog-hover: #2563eb;
+  --blog-toggle-border: rgba(0, 0, 0, 0.15);
+  --blog-toggle-text: #374151;
+}
+
+/* Which glyph the theme toggle shows is decided in CSS too, for the same
+   reason — picking it in JS would render the wrong icon until hydration. */
+.blog-theme-moon {
+  display: none;
+}
+[data-blog-theme="light"] .blog-theme-sun {
+  display: none;
+}
+[data-blog-theme="light"] .blog-theme-moon {
+  display: block;
+}
+
 body {
   background-color: var(--bg-color);
   color: var(--text-main);
@@ -44,6 +85,41 @@ h6 {
   margin-inline: auto;
   max-width: clamp(720px, 92vw, 1760px);
   padding-inline: clamp(1.5rem, 3vw, 4rem);
+}
+
+/* The two blog typefaces, as classes rather than repeated inline styles — the
+   list pages otherwise emit the same font-family string on every row. */
+.blog-serif {
+  font-family: var(--font-playfair), Georgia, serif;
+}
+.blog-sans {
+  font-family: var(--font-poppins), Poppins, sans-serif;
+}
+
+/* One row of the post list. Hover lives in CSS so the list needs no JS: the
+   whole page is server-rendered and stays interactive before hydration. */
+.blog-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 0.75rem;
+  border-bottom: 1px solid var(--blog-border);
+}
+.blog-row-title {
+  color: var(--blog-text);
+  transition: color 0.2s ease;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.blog-row:hover .blog-row-title {
+  color: var(--blog-hover);
+}
+.blog-row-date {
+  color: var(--blog-text-secondary);
+  flex-shrink: 0;
 }
 
 /* Christmas Snowfall Animation - Remove after Christmas */

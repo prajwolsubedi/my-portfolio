@@ -1,62 +1,125 @@
-"use client";
-
-import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import type { Blog, BlogBlock } from "@/lib/types";
+import type { BlogBlock } from "@/lib/types";
+import { getBlog, listBlogSummaries } from "@/lib/blogStore";
+import { isAuthenticated } from "@/lib/auth";
+import { parseHabitTracker, serializeHabitTracker, stripHiddenHabits } from "@/lib/habitUtils";
 import {
   formatDate,
   formatPeriod,
   getBlogCategory,
+  isVisibleToPublic,
   parsePeriodKey,
   resolveBlogPeriod,
 } from "@/lib/blogUtils";
-import { parseHabitTracker, serializeHabitTracker } from "@/lib/habitUtils";
-import HabitTrackerGrid from "@/components/blog/HabitTracker";
-import {
-  BlogThemeProvider,
-  useTheme,
-  ThemeToggleButton,
-  blogThemeStyles,
-} from "@/components/blog/ThemeToggle";
+import { BLOG_IMAGE_SIZES, imageSrcSet, optimizedImageUrl } from "@/lib/media";
+import { ThemeToggleButton } from "@/components/blog/ThemeToggle";
+import YouTubeEmbed from "@/components/blog/YouTubeEmbed";
+import { PostAdminBar, PostEditingProvider } from "./PostEditing";
+import HabitBlock from "./HabitBlock";
 
-interface BlockRendererProps {
-  block: BlogBlock;
-  period: string;
-  editable: boolean;
-  onContentChange: (blockId: string, content: string) => void;
+/** Backstop; writes call `revalidateTag`, so edits show up immediately. */
+export const revalidate = 3600;
+
+/**
+ * Published posts are rendered at build time and served as static HTML. Drafts
+ * and private posts aren't listed here — they fall through to an on-demand
+ * render below, which is where the session gets checked.
+ */
+export async function generateStaticParams() {
+  const blogs = await listBlogSummaries();
+  return blogs.filter(isVisibleToPublic).map((blog) => ({ id: blog.id }));
 }
 
-function BlogBlockRenderer({ block, period, editable, onContentChange }: BlockRendererProps) {
+/** First bit of prose in the post, for the description meta tag. */
+function excerpt(blocks: BlogBlock[]): string | undefined {
+  const text = blocks.find((b) => b.type === "text")?.content?.trim();
+  if (!text) return undefined;
+  return text.length > 160 ? `${text.slice(0, 157)}…` : text;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const blog = await getBlog(id);
+
+  // Don't put an unpublished post's title in a <title> tag.
+  if (!blog || !isVisibleToPublic(blog)) return { title: "Blog — Prajwol Subedi" };
+
+  return {
+    title: `${blog.title} — Prajwol Subedi`,
+    description: excerpt(blog.blocks),
+    openGraph: {
+      title: blog.title,
+      description: excerpt(blog.blocks),
+      type: "article",
+      publishedTime: new Date(blog.createdAt).toISOString(),
+    },
+  };
+}
+
+function Caption({ text }: { text: string }) {
+  return (
+    <figcaption
+      className="blog-sans text-center text-sm mt-3 italic"
+      style={{ color: "var(--blog-text-secondary)" }}
+    >
+      {text}
+    </figcaption>
+  );
+}
+
+/**
+ * One block of a post. Everything here renders on the server except the habit
+ * grid, which needs the reader's own clock to know which days are still open.
+ *
+ * `priority` marks the first piece of media in the post: it's the one most
+ * likely to be the largest element in the initial viewport, so it loads
+ * immediately while everything below it waits until it's scrolled near.
+ */
+function BlockView({
+  block,
+  period,
+  priority,
+  authed,
+}: {
+  block: BlogBlock;
+  period: string;
+  priority: boolean;
+  authed: boolean;
+}) {
   switch (block.type) {
     case "text":
       return (
         <div
-          className="text-[1.05rem] sm:text-lg leading-[1.8] whitespace-pre-wrap"
-          style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", fontWeight: 400, color: "var(--blog-text)" }}
+          className="blog-sans text-[1.05rem] sm:text-lg leading-[1.8] whitespace-pre-wrap"
+          style={{ fontWeight: 400, color: "var(--blog-text)" }}
         >
           {block.content}
         </div>
       );
+
     case "image":
       return (
         <figure className="my-8">
           <img
-            src={block.content}
+            src={optimizedImageUrl(block.content)}
+            srcSet={imageSrcSet(block.content)}
+            sizes={BLOG_IMAGE_SIZES}
             alt={block.caption || "Blog image"}
             className="w-full rounded-lg"
-            loading="lazy"
+            loading={priority ? "eager" : "lazy"}
+            fetchPriority={priority ? "high" : "auto"}
+            decoding="async"
           />
-          {block.caption && (
-            <figcaption
-              className="text-center text-sm mt-3 italic"
-              style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}
-            >
-              {block.caption}
-            </figcaption>
-          )}
+          {block.caption && <Caption text={block.caption} />}
         </figure>
       );
+
     case "video":
       return (
         <figure className="my-8">
@@ -66,250 +129,117 @@ function BlogBlockRenderer({ block, period, editable, onContentChange }: BlockRe
             className="w-full rounded-lg"
             preload="metadata"
           />
-          {block.caption && (
-            <figcaption
-              className="text-center text-sm mt-3 italic"
-              style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}
-            >
-              {block.caption}
-            </figcaption>
-          )}
+          {block.caption && <Caption text={block.caption} />}
         </figure>
       );
+
     case "youtube":
       return (
         <figure className="my-8">
           <div className="aspect-video rounded-lg overflow-hidden">
-            <iframe
-              src={`https://www.youtube-nocookie.com/embed/${block.content}`}
-              className="w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              loading="lazy"
-            />
+            <YouTubeEmbed videoId={block.content} title={block.caption} />
           </div>
-          {block.caption && (
-            <figcaption
-              className="text-center text-sm mt-3 italic"
-              style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}
-            >
-              {block.caption}
-            </figcaption>
-          )}
+          {block.caption && <Caption text={block.caption} />}
         </figure>
       );
+
     case "habits": {
-      const now = new Date();
-      const fallback = parsePeriodKey(period) ?? {
-        year: now.getFullYear(),
-        month: now.getMonth(),
-      };
-      return (
-        <HabitTrackerGrid
-          variant="public"
-          tracker={parseHabitTracker(block.content, fallback.year, fallback.month)}
-          readOnly={!editable}
-          onChange={
-            editable
-              ? (next) => onContentChange(block.id, serializeHabitTracker(next))
-              : undefined
-          }
-        />
-      );
+      const parsed = parsePeriodKey(period);
+      const year = parsed?.year ?? new Date().getFullYear();
+      const month = parsed?.month ?? new Date().getMonth();
+
+      // Habits marked hidden are stripped out of the content before it ever
+      // reaches a non-admin reader — filtering them in the UI alone would
+      // still leak the name and daily marks through the rendered page.
+      const publicBlock = authed
+        ? block
+        : {
+            ...block,
+            content: serializeHabitTracker(
+              stripHiddenHabits(parseHabitTracker(block.content, year, month))
+            ),
+          };
+
+      return <HabitBlock block={publicBlock} year={year} month={month} />;
     }
+
     default:
       return null;
   }
 }
 
-function BlogPostContent() {
-  const { theme } = useTheme();
-  const params = useParams();
-  const id = params.id as string;
-  const [blog, setBlog] = useState<Blog | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [authed, setAuthed] = useState(false);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+export default async function BlogPostPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const blog = await getBlog(id);
+  if (!blog) notFound();
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingBlocks = useRef<BlogBlock[] | null>(null);
+  // Reading the session is what makes a render dynamic, so it happens only on
+  // the branches that need it: a post with no habits block and nothing to hide
+  // never reaches this line and stays fully static, while the author can still
+  // open a draft at its real URL, and a habit tracker's hidden columns never
+  // reach a signed-out reader.
+  const hasHabitsBlock = blog.blocks.some((b) => b.type === "habits");
+  const authed =
+    !isVisibleToPublic(blog) || hasHabitsBlock ? await isAuthenticated() : false;
 
-  useEffect(() => {
-    fetch(`/api/blogs/${id}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Not found");
-        return res.json();
-      })
-      .then((data) => {
-        setBlog(data.blog);
-        setLoading(false);
-      })
-      .catch(() => {
-        setError(true);
-        setLoading(false);
-      });
-  }, [id]);
-
-  // Logged in? Then habits are tickable straight from the post — no detour
-  // through the editor just to check off a day.
-  useEffect(() => {
-    fetch("/api/auth/check")
-      .then((r) => r.json())
-      .then((d) => setAuthed(!!d.authenticated))
-      .catch(() => setAuthed(false));
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
-  }, []);
-
-  const handleContentChange = (blockId: string, content: string) => {
-    if (!blog) return;
-
-    const nextBlocks = blog.blocks.map((b) =>
-      b.id === blockId ? { ...b, content } : b
-    );
-    setBlog({ ...blog, blocks: nextBlocks });
-    pendingBlocks.current = nextBlocks;
-    setSaveState("saving");
-
-    // Debounced so ticking a run of days is one write, not ten.
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/blogs/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ blocks: pendingBlocks.current }),
-        });
-        setSaveState(res.ok ? "saved" : "error");
-      } catch {
-        setSaveState("error");
-      }
-    }, 600);
-  };
-
-  const styles = blogThemeStyles(theme);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ ...styles, backgroundColor: "var(--blog-bg)" }}>
-        <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" style={{ color: "var(--blog-text-secondary)" }} />
-      </div>
-    );
-  }
-
-  if (error || !blog) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ ...styles, backgroundColor: "var(--blog-bg)" }}>
-        <p className="text-lg" style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}>
-          Post not found.
-        </p>
-        <Link
-          href="/blogs"
-          className="text-sm hover:underline"
-          style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-hover)" }}
-        >
-          ← Back to Blog
-        </Link>
-      </div>
-    );
-  }
+  if (!isVisibleToPublic(blog) && !authed) notFound();
 
   const isMonthly = getBlogCategory(blog) === "monthly";
   const period = resolveBlogPeriod(blog);
-  const saveLabel =
-    saveState === "saving"
-      ? "Saving…"
-      : saveState === "saved"
-      ? "Saved"
-      : saveState === "error"
-      ? "Couldn't save"
-      : "";
+  const firstMediaId = blog.blocks.find((b) => b.type === "image")?.id;
 
   return (
-    <div className="min-h-screen transition-colors duration-300" style={{ ...styles, backgroundColor: "var(--blog-bg)" }}>
-      <article className="blog-shell pt-12 pb-20">
-        {/* Navigation */}
-        <div className="flex items-center justify-between">
-          <Link
-            href="/blogs"
-            className="text-sm transition-colors hover:opacity-70"
-            style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}
-          >
-            ← Back to Blog
-          </Link>
-          <div className="flex items-center gap-3">
-            {authed && (
-              <>
-                {saveLabel && (
-                  <span
-                    className="text-xs"
-                    style={{
-                      fontFamily: "var(--font-poppins), Poppins, sans-serif",
-                      color: saveState === "error" ? "#f87171" : "var(--blog-text-secondary)",
-                    }}
-                  >
-                    {saveLabel}
-                  </span>
-                )}
-                <Link
-                  href={`/blogs/admin?edit=${blog.id}`}
-                  className="text-xs px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80"
-                  style={{
-                    fontFamily: "var(--font-poppins), Poppins, sans-serif",
-                    color: "var(--blog-hover)",
-                    border: "1px solid var(--blog-border)",
-                  }}
-                >
-                  Edit post
-                </Link>
-              </>
-            )}
-            <ThemeToggleButton />
+    <PostEditingProvider>
+      <div
+        className="min-h-screen transition-colors duration-300"
+        style={{ backgroundColor: "var(--blog-bg)" }}
+      >
+        <article className="blog-shell pt-12 pb-20">
+          <div className="flex items-center justify-between">
+            <Link
+              href="/blogs"
+              className="blog-sans text-sm transition-colors hover:opacity-70"
+              style={{ color: "var(--blog-text-secondary)" }}
+            >
+              ← Back to Blog
+            </Link>
+            <div className="flex items-center gap-3">
+              <PostAdminBar blogId={blog.id} />
+              <ThemeToggleButton />
+            </div>
           </div>
-        </div>
 
-        {/* Title */}
-        <h1
-          className="text-3xl sm:text-4xl md:text-5xl font-light mt-10 mb-4 leading-tight"
-          style={{ fontFamily: "var(--font-playfair), Georgia, serif", letterSpacing: "-0.02em", color: "var(--blog-text)" }}
-        >
-          {blog.title}
-        </h1>
+          <h1
+            className="blog-serif text-3xl sm:text-4xl md:text-5xl font-light mt-10 mb-4 leading-tight"
+            style={{ letterSpacing: "-0.02em", color: "var(--blog-text)" }}
+          >
+            {blog.title}
+          </h1>
 
-        {/* Date */}
-        <time
-          className="text-sm block mb-12"
-          style={{ fontFamily: "var(--font-poppins), Poppins, sans-serif", color: "var(--blog-text-secondary)" }}
-        >
-          {isMonthly ? formatPeriod(period) : formatDate(blog.createdAt)}
-        </time>
+          <time
+            className="blog-sans text-sm block mb-12"
+            style={{ color: "var(--blog-text-secondary)" }}
+          >
+            {isMonthly ? formatPeriod(period) : formatDate(blog.createdAt)}
+          </time>
 
-        {/* Content Blocks */}
-        <div className="space-y-6">
-          {blog.blocks.map((block) => (
-            <BlogBlockRenderer
-              key={block.id}
-              block={block}
-              period={period}
-              editable={authed}
-              onContentChange={handleContentChange}
-            />
-          ))}
-        </div>
-      </article>
-    </div>
-  );
-}
-
-export default function BlogPostPage() {
-  return (
-    <BlogThemeProvider>
-      <BlogPostContent />
-    </BlogThemeProvider>
+          <div className="space-y-6">
+            {blog.blocks.map((block) => (
+              <BlockView
+                key={block.id}
+                block={block}
+                period={period}
+                priority={block.id === firstMediaId}
+                authed={authed}
+              />
+            ))}
+          </div>
+        </article>
+      </div>
+    </PostEditingProvider>
   );
 }

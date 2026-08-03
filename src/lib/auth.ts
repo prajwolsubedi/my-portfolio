@@ -3,9 +3,10 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { doc, getDoc, setDoc, deleteDoc, updateDoc, increment } from "firebase/firestore";
 import { db } from "./firebase";
+import { ADMIN_HINT_COOKIE } from "./authHint";
 
 const SESSION_COOKIE = "blog_admin_session";
-const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 const OTP_COOKIE = "blog_otp_challenge";
 const OTP_TTL = 5 * 60 * 1000; // 5 minutes
@@ -54,6 +55,17 @@ export async function createSession(): Promise<void> {
     maxAge: SESSION_DURATION / 1000,
     path: "/",
   });
+
+  // Readable twin of the session, so the public post page can tell whether an
+  // auth check is worth making. Deliberately not httpOnly — it's a hint, not a
+  // credential, and every authorization decision still reads SESSION_COOKIE.
+  cookieStore.set(ADMIN_HINT_COOKIE, "1", {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: SESSION_DURATION / 1000,
+    path: "/",
+  });
 }
 
 export async function isAuthenticated(): Promise<boolean> {
@@ -73,6 +85,7 @@ export async function isAuthenticated(): Promise<boolean> {
 export async function destroySession(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE);
+  cookieStore.delete(ADMIN_HINT_COOKIE);
 }
 
 // ---- Email OTP challenge (second factor after password) ----

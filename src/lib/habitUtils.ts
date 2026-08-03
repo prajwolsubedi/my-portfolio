@@ -3,7 +3,7 @@ import type { DayLog, Habit, HabitTracker, RatingField } from "./types";
 // Habit trackers ride inside BlogBlock.content as JSON: the shape is a grid, and
 // Firestore refuses nested arrays, so serialising keeps the block schema flat.
 
-type LooseHabit = { id?: unknown; name?: unknown; days?: unknown };
+type LooseHabit = { id?: unknown; name?: unknown; days?: unknown; hidden?: unknown };
 type LooseTracker = {
   year?: unknown;
   month?: unknown;
@@ -103,6 +103,7 @@ export function parseHabitTracker(
           id: typeof habit.id === "string" && habit.id ? habit.id : `habit-${index}`,
           name: typeof habit.name === "string" ? habit.name : "",
           days: normalizeDays(habit.days, total),
+          hidden: habit.hidden === true,
         };
       })
     : [];
@@ -138,6 +139,28 @@ export function toggleHabitDay(
         : habit
     ),
   };
+}
+
+/** Flips whether a habit's column is shown to public readers. Admin-only. */
+export function toggleHabitVisibility(tracker: HabitTracker, habitId: string): HabitTracker {
+  return {
+    ...tracker,
+    habits: tracker.habits.map((habit) =>
+      habit.id === habitId ? { ...habit, hidden: !habit.hidden } : habit
+    ),
+  };
+}
+
+/**
+ * Drops hidden habits entirely, rather than just marking them read-only.
+ *
+ * Used server-side before a habits block ever reaches a non-admin reader, so a
+ * hidden habit's name and daily marks never leave the server — filtering them
+ * out only in the rendered UI would still leak the data through the page's
+ * source or serialized props.
+ */
+export function stripHiddenHabits(tracker: HabitTracker): HabitTracker {
+  return { ...tracker, habits: tracker.habits.filter((habit) => !habit.hidden) };
 }
 
 /** Reorders habits (and so their table columns) by moving one to another slot. */

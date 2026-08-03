@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { isAuthenticated } from "@/lib/auth";
+import { BLOGS_TAG, blogTag, getBlog } from "@/lib/blogStore";
 import { isVisibleToPublic, parsePeriodKey } from "@/lib/blogUtils";
-import type { Blog } from "@/lib/types";
+
+/** Both caches a write touches: the post itself, and every list it appears in. */
+function revalidateBlog(id: string) {
+  // "max" purges outright rather than letting a stale copy be served on; the
+  // author has just made the edit and expects to see it.
+  revalidateTag(blogTag(id), "max");
+  revalidateTag(BLOGS_TAG, "max");
+}
 
 // GET /api/blogs/[id] — get a single blog
 export async function GET(
@@ -12,14 +21,11 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const docRef = doc(db, "blogs", id);
-    const docSnap = await getDoc(docRef);
+    const blog = await getBlog(id);
 
-    if (!docSnap.exists()) {
+    if (!blog) {
       return NextResponse.json({ error: "Blog not found" }, { status: 404 });
     }
-
-    const blog = { id: docSnap.id, ...docSnap.data() } as Blog;
 
     // If blog is not visible to the public, only admins can view
     const authed = await isAuthenticated();
@@ -63,6 +69,8 @@ export async function PUT(
     const docRef = doc(db, "blogs", id);
     await updateDoc(docRef, updateData);
 
+    revalidateBlog(id);
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error updating blog:", error);
@@ -87,6 +95,8 @@ export async function DELETE(
     const { id } = await params;
     const docRef = doc(db, "blogs", id);
     await deleteDoc(docRef);
+
+    revalidateBlog(id);
 
     return NextResponse.json({ success: true });
   } catch (error) {
