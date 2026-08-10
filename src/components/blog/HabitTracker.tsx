@@ -105,13 +105,12 @@ export default function HabitTrackerGrid({
       ? now.getDate()
       : null;
 
-  // A hidden habit drops out of the grid itself — for the admin too, not just
-  // readers. Clicking the eye icon needs a visible, immediate effect or it
-  // reads as broken; toggling it back on happens from the chip strip below,
-  // which lists every habit regardless of hidden state. Filtering here is
-  // also a defense-in-depth backstop for readers — the real barrier is the
+  // A hidden habit drops out of the grid for readers, but stays visible (just
+  // dimmed) for admins so they can still track and unhide it from the table
+  // itself, not only the chip strip below. Filtering here for the public
+  // variant is also a defense-in-depth backstop — the real barrier is the
   // server never sending a hidden habit's data to a signed-out request.
-  const tableHabits = tracker.habits.filter((h) => !h.hidden);
+  const tableHabits = variant === "admin" ? tracker.habits : tracker.habits.filter((h) => !h.hidden);
   const tableTracker = { ...tracker, habits: tableHabits };
   const { done, possible, daysLogged } = trackerTotals(tableTracker);
   const hasHabits = tableHabits.length > 0;
@@ -219,7 +218,7 @@ export default function HabitTrackerGrid({
           <thead>
             <tr>
               <th
-                className="sticky left-0 z-10 text-left text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-wider font-normal align-bottom px-6 pt-4 pb-3 w-[84px] sm:w-[90px] lg:w-[96px] min-w-[84px] sm:min-w-[90px] lg:min-w-[96px]"
+                className="sticky left-0 top-0 z-30 text-left text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-wider font-normal align-bottom px-6 pt-4 pb-3 w-[84px] sm:w-[90px] lg:w-[96px] min-w-[84px] sm:min-w-[90px] lg:min-w-[96px]"
                 style={{
                   color: palette.muted,
                   backgroundColor: palette.surface,
@@ -233,8 +232,8 @@ export default function HabitTrackerGrid({
                 <th
                   key={habit.id}
                   title={habit.name || "Untitled habit"}
-                  className="font-normal align-bottom p-0 w-[40px] min-w-[40px]"
-                  style={{ borderBottom: `1px solid ${palette.border}` }}
+                  className="sticky top-0 z-20 font-normal align-bottom p-0 w-[40px] min-w-[40px]"
+                  style={{ backgroundColor: palette.surface, borderBottom: `1px solid ${palette.border}` }}
                 >
                   {/* The header grows to fit the longest habit name rather than
                       clipping it; the cap is only there so a runaway name can't
@@ -259,6 +258,7 @@ export default function HabitTrackerGrid({
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       color: palette.text,
+                      opacity: habit.hidden ? 0.5 : 1,
                     }}
                   >
                     {habit.name || "Untitled habit"}
@@ -268,8 +268,12 @@ export default function HabitTrackerGrid({
 
               {hasHabits && (
                 <th
-                  className="font-normal text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-wider align-bottom px-3 pt-4 pb-3 w-[52px] sm:w-[56px] lg:w-[60px] min-w-[52px] sm:min-w-[56px] lg:min-w-[60px]"
-                  style={{ color: palette.muted, borderBottom: `1px solid ${palette.border}` }}
+                  className="sticky top-0 z-20 font-normal text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-wider align-bottom px-3 pt-4 pb-3 w-[52px] sm:w-[56px] lg:w-[60px] min-w-[52px] sm:min-w-[56px] lg:min-w-[60px]"
+                  style={{
+                    color: palette.muted,
+                    backgroundColor: palette.surface,
+                    borderBottom: `1px solid ${palette.border}`,
+                  }}
                 >
                   Done
                 </th>
@@ -278,8 +282,12 @@ export default function HabitTrackerGrid({
               {RATING_FIELDS.map((field) => (
                 <th
                   key={field}
-                  className="font-normal text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-wider align-bottom px-2 pt-4 pb-3 w-[58px] sm:w-[62px] lg:w-[66px] min-w-[58px] sm:min-w-[62px] lg:min-w-[66px]"
-                  style={{ color: palette.muted, borderBottom: `1px solid ${palette.border}` }}
+                  className="sticky top-0 z-20 font-normal text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-wider align-bottom px-2 pt-4 pb-3 w-[58px] sm:w-[62px] lg:w-[66px] min-w-[58px] sm:min-w-[62px] lg:min-w-[66px]"
+                  style={{
+                    color: palette.muted,
+                    backgroundColor: palette.surface,
+                    borderBottom: `1px solid ${palette.border}`,
+                  }}
                 >
                   <span className="block leading-tight">{ratingLabel(tracker, field)}</span>
                   <span className="block leading-tight opacity-60">/{RATING_MAX}</span>
@@ -287,8 +295,12 @@ export default function HabitTrackerGrid({
               ))}
 
               <th
-                className="font-normal text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-wider text-left align-bottom px-5 pt-4 pb-3 min-w-[220px]"
-                style={{ color: palette.muted, borderBottom: `1px solid ${palette.border}` }}
+                className="sticky top-0 z-20 font-normal text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-wider text-left align-bottom px-5 pt-4 pb-3 min-w-[220px]"
+                style={{
+                  color: palette.muted,
+                  backgroundColor: palette.surface,
+                  borderBottom: `1px solid ${palette.border}`,
+                }}
               >
                 The day
               </th>
@@ -340,6 +352,7 @@ export default function HabitTrackerGrid({
                       backgroundColor: marked ? palette.accent : "transparent",
                       border: marked ? "none" : `1px solid ${palette.border}`,
                       color: palette.muted,
+                      opacity: habit.hidden ? 0.5 : 1,
                     };
                     return (
                       <td
@@ -444,7 +457,7 @@ export default function HabitTrackerGrid({
                   <td
                     key={habit.id}
                     className="px-0 py-3.5 text-center text-xs sm:text-sm tabular-nums"
-                    style={{ color: palette.text }}
+                    style={{ color: palette.text, opacity: habit.hidden ? 0.5 : 1 }}
                   >
                     {habit.days.length}
                   </td>
