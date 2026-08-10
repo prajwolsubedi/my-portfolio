@@ -213,7 +213,13 @@ export default function HabitTrackerGrid({
       </div>
 
       {/* Grid: days down the side, habits across the top */}
-      <div className="overflow-x-auto">
+      {/* overflow-x-auto alone would still let the parent's height be
+          unbounded, and an unbounded scroll container never actually scrolls
+          internally — the page scrolls instead, and a `sticky` child has
+          nothing to stick within. Capping the height and scrolling both axes
+          here makes this div the real scroll container the sticky header
+          attaches to. */}
+      <div className="overflow-auto max-h-[70vh]">
         <table className="w-full border-collapse" style={fontPoppins}>
           <thead>
             <tr>
